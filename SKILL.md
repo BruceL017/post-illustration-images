@@ -34,7 +34,7 @@ Style Spec is the authority for each platform visual template. It controls canva
 
 Brand Plugin is optional and pluggable. It only decides whether a brand is enabled and which brand asset to use. It must not decide canvas size, color palette, coordinates, or platform layout. When enabled, the Brand Plugin must obey the selected Style Spec's brand slot. If the selected style has no brand slot, do not improvise a global placement.
 
-The image model must not draw logos, `TF`, `Tranfu`, watermarks, page-number badges, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step.
+The image model must not draw logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step.
 
 ## Supported Scope
 
@@ -163,7 +163,7 @@ Generate one prompt per image. Do not ask the image model to create an entire mu
 
 If a style file contains batch language such as "generate the whole set", treat it as planning guidance for count, sequence, and consistency. Still compile and generate one image at a time.
 
-The prompt must explicitly forbid model-drawn logos, `TF`, `Tranfu`, watermarks, and page-number badges. When the Brand Plugin is enabled, ask the model to keep the selected Style Spec's brand slot clear so the real brand asset can be overlaid after generation.
+The prompt must explicitly forbid model-drawn logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, and visible brand-slot markers. When the Brand Plugin is enabled, ask the model to keep the selected Style Spec's brand slot free of important content so the real brand asset can be overlaid after generation. Do not ask the model to visibly "reserve" or "mark" the slot.
 
 ### 7. Generate One Image At A Time
 
@@ -199,8 +199,9 @@ If an image fails, identify the reason before retrying:
 - Too many ideas: split or remove anchors.
 - Style drift: strengthen selected style source and negative constraints.
 - Weak metaphor: rewrite physical action and object.
-- Brand was drawn by the model: regenerate with stronger "no logo/no TF/no Tranfu" constraints, then apply the Brand Plugin overlay.
+- Brand or placeholder frame was drawn by the model: regenerate with stronger "no logo/no TF/no Tranfu/no placeholder frame/no reserve box" constraints, then apply the Brand Plugin overlay.
 - Brand overlay blocks content: use the Style Spec's reserved brand slot; if content occupies that slot, regenerate with a clearer reserved area.
+- Existing content must not change but a brand-slot artifact exists: avoid full-image regeneration; restore the original unbranded image, remove only the local artifact with same-image paper/background texture, then reapply the deterministic brand overlay.
 - Layout too empty or crowded: adjust structure, not the whole style.
 
 ### 9. Save And Deliver
@@ -237,6 +238,6 @@ Final response must include:
 - Visual metaphor turns abstraction into a concrete scene.
 - Suite-level Style Spec controls platform appearance, dimensions, colors, layout, safe areas, and fixed component slots.
 - Brand Plugin is enabled by default only when the selected Style Spec defines a brand slot; it must obey that slot and must not behave as a global visual system.
-- The image model must not draw brand logos or page-number badges.
+- The image model must not draw brand logos, page-number badges, placeholder frames, reserve boxes, or visible brand-slot markers.
 - Generate and QA one image at a time.
 - Save generated assets outside the skill folder.

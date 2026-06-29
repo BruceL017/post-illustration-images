@@ -75,7 +75,7 @@
 - Brand slot: enabled when Brand Plugin is enabled.
 - Brand slot for this style: bottom-right, `x=878, y=1358, w=148, h=40`.
 - Brand slot asset: real `TF + Tranfu` SVG overlaid after generation.
-- The image model must not draw `TF`, `Tranfu`, logo shapes, watermarks, or brand stickers.
+- The image model must not draw `TF`, `Tranfu`, logo shapes, watermarks, brand stickers, placeholder frames, reserve boxes, guide outlines, or visible markers for the brand slot.
 
 ---
 
@@ -357,6 +357,7 @@
 - 装饰压过正文
 - 数字页码角标
 - 模型生成的 logo、水印或品牌贴纸
+- 右下角品牌槽的占位框、线框、空标签、角标或可见引导线
 
 ---
 
@@ -462,7 +463,8 @@
 - 图标统一为扁平、圆润、简洁、可爱的风格
 - 不生成页码角标
 - 不生成 logo、水印或品牌贴纸
-- 右下角 `x=848, y=1328, w=208, h=90` 区域保持清爽，留给后期品牌 SVG 叠加
+- 右下角 `x=848, y=1328, w=208, h=90` 区域不放正文、图标、机器人或结论条，留给后期品牌 SVG 叠加
+- 右下角品牌区域必须保持自然纸面/背景状态，不要画占位框、线框、贴纸、空标签、角标或引导线
 - 整体风格是小红书手账感科普信息图
 - 不是科技炫酷风
 - 不是商务 PPT 风
@@ -494,6 +496,7 @@
 - 不要乱改原文含义
 - 不要生成数字页码角标
 - 不要生成 logo、水印或品牌贴纸
+- 不要生成品牌槽占位框、线框、空标签或可见引导线
 
 ---
 

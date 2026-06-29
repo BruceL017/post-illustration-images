@@ -23,12 +23,14 @@ Run QA after each image, after optional overlays, and before delivery.
 - Fixed component reserved areas stay clear.
 - Page-number badges are absent unless the selected Style Spec explicitly enables them.
 - Template-level components do not move randomly between images.
+- Fixed component slots are not visibly marked by placeholder frames, reserve boxes, guide outlines, empty labels, or stickers.
 
 ## Brand Plugin QA
 
 Run only when Brand Plugin is enabled.
 
 - The image model did not draw a logo, `TF`, `Tranfu`, watermark, or brand sticker.
+- The image model did not draw a placeholder frame, reserve box, guide outline, empty label, or visible marker for the brand slot.
 - The real brand asset was overlaid after generation.
 - The asset matches `references/brand.md`.
 - Placement and size follow the selected Style Spec's `brandSlot`.
@@ -56,9 +58,12 @@ If Brand Plugin is disabled, QA should record `Brand Plugin: disabled`, not fail
 | Weak metaphor | Rewrite as physical action plus concrete object. |
 | Looks like PPT | Reduce grid density, title bars, and rigid arrows; emphasize scene/object. |
 | Model drew logo, `TF`, `Tranfu`, or watermark | Regenerate with stronger fixed-component negative constraints. |
+| Model drew a brand-slot placeholder frame, reserve box, or guide outline | Regenerate with explicit "no placeholder frame/no reserve box/no visible brand-slot marker" constraints before overlay. |
 | Brand overlay blocks content | Regenerate with the Style Spec brand slot kept clear, or revise that Style Spec's slot. |
 | Page-number badge appears | Regenerate with page badge forbidden. |
 | Layout is empty | Add one content card, conclusion bar, icon group, or action detail. |
 | Layout is crowded | Remove secondary labels and reduce visual elements. |
 
 Do not retry blindly. Each regeneration must name the failure being corrected.
+
+If the user requires existing content to remain unchanged, avoid full-image regeneration for a local brand-slot artifact. Restore the original unbranded image, remove only the artifact using same-image paper/background texture, then rerun the deterministic brand overlay and QA the slot again.
