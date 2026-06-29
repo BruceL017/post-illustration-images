@@ -49,7 +49,7 @@ Short labels:
 
 Brand Plugin:
 <enabled/disabled>
-If enabled: keep the selected Style Spec's brand slot clear. Do not draw any logo, TF mark, Tranfu text, watermark, brand sticker, or page-number badge. The real brand SVG will be overlaid after generation.
+If enabled: keep the selected Style Spec's brand slot free of important content. Do not draw any logo, TF mark, Tranfu text, watermark, brand sticker, page-number badge, placeholder frame, reserve box, outline, empty label, or visible brand-slot marker. The real brand SVG will be overlaid after generation.
 
 Constraints:
 - Generate only this one image, not a collage and not the whole set.
@@ -59,6 +59,7 @@ Constraints:
 - Avoid long text blocks. Use short, readable labels.
 - Keep important content inside the selected Style Spec's content safe area.
 - Keep fixed component reserved areas clear.
+- Keep reserved areas visually natural; do not mark them with a box, border, sticker, badge, or guide line.
 ```
 
 ## Visual Metaphor Method
@@ -89,6 +90,7 @@ Keep these out of the image model unless a selected Style Spec explicitly says o
 - `TF` or `Tranfu` text.
 - Watermarks.
 - Page-number badges.
+- Placeholder frames, reserve boxes, guide outlines, or visible markers for fixed component slots.
 - Template-level overlays that must be pixel-stable.
 
 If the model draws any of these by accident, regenerate with stronger negative constraints before applying overlays.
