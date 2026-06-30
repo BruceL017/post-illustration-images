@@ -178,6 +178,20 @@ After each generation:
 - If Brand Plugin is disabled, save deliverables under `images/`.
 - Use ordered filenames, for example `01-cover.png`, `02-process-breakpoint.png`.
 
+### 7.1 Continue Existing Assets
+
+Use this branch when the user asks to continue from images already generated in this thread or saved locally, for example adding a watermark, processing "the previous image", restoring a candidate, or adding one more image to an existing set.
+
+Keep the scope minimal:
+
+- First identify the exact target image set from the current output folder, `manifest.md`, user-provided screenshots/paths, and recent native generation cache when needed.
+- Do not regenerate or reprocess the whole set when the request concerns only one or a few existing images.
+- If the target image is ambiguous or the discovered count conflicts with the user's count, create a quick contact sheet or ask for confirmation before copying candidates into the final output.
+- For overlays, start from the unbranded/source image when available so the same brand mark is not applied twice.
+- Keep only the minimal manifest update needed for the changed files: file, source/candidate note if relevant, overlay status, size check, and QA status.
+
+Exit when the intended files, count, source images, and output paths are known. Then run only the required overlay, copy, or single-image generation step.
+
 ### 7.5 Apply Brand Plugin Overlay
 
 If the Brand Plugin is enabled and the selected Style Spec defines a brand slot:
