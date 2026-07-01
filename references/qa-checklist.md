@@ -19,6 +19,8 @@ Run QA after each image, after optional overlays, and before delivery.
 
 - Canvas size and page orientation follow the selected Style Spec unless explicitly overridden.
 - Fixed palette follows the selected Style Spec closely enough for the platform template.
+- The selected style has one Style Reference image, and the generated image matches its baseline visual system.
+- Style Reference comparison ignores semantic content and checks only palette, texture, spacing, typography feel, icon/illustration style, composition language, and fixed-component treatment.
 - Content stays inside the selected Style Spec's content safe area.
 - Fixed component reserved areas stay clear.
 - Page-number badges are absent unless the selected Style Spec explicitly enables them.
@@ -54,7 +56,7 @@ If Brand Plugin is disabled, QA should record `Brand Plugin: disabled`, not fail
 |---|---|
 | Text is wrong or unreadable | Reduce labels; regenerate with shorter text. |
 | Too many ideas in one image | Split anchor or delete secondary idea. |
-| Style drift | Reinsert selected Style Spec constraints and negative constraints. |
+| Style drift | Compare with the Style Reference, ignore its semantic content, then reinsert selected Style Spec constraints and negative constraints. |
 | Weak metaphor | Rewrite as physical action plus concrete object. |
 | Looks like PPT | Reduce grid density, title bars, and rigid arrows; emphasize scene/object. |
 | Model drew logo, `TF`, `Tranfu`, or watermark | Regenerate with stronger fixed-component negative constraints. |

@@ -32,6 +32,8 @@ Always read the content before choosing a visual style. Use one suite-level styl
 
 Style Spec is the authority for each platform visual template. It controls canvas size, aspect ratio, fixed color values, layout, safe areas, negative constraints, and any fixed component slots such as a brand slot.
 
+Style Reference images are long-lived QA baselines for failure review. They show the expected visual presentation of a style, but they are not generation inputs and their semantic content must never be copied into new images.
+
 Brand Plugin is optional and pluggable. It only decides whether a brand is enabled and which brand asset to use. It must not decide canvas size, color palette, coordinates, or platform layout. When enabled, the Brand Plugin must obey the selected Style Spec's brand slot. If the selected style has no brand slot, do not improvise a global placement.
 
 The image model must not draw logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step.
@@ -64,9 +66,11 @@ Use references by need, not all at once:
 - Start with `references/style-index.md` to identify platform and candidate style files.
 - Read the selected file under `references/styles/` completely before compiling prompts.
 - Read `references/brand.md` unless the user explicitly disables the Brand Plugin.
+- When Brand Plugin may be enabled, run `node scripts/check-rsvg-convert.mjs` before generation to verify deterministic overlay support.
 - Read `references/content-structures.md` when selecting per-image expression structures.
 - Read `references/prompt-compiler.md` before writing final generation prompts.
 - Read `references/qa-checklist.md` before delivery or regeneration.
+- When QA finds style drift or a regeneration is needed, inspect the selected style's Style Reference image from `references/style-index.md` or the selected `.spec.json`.
 - Read `references/product-design.md` only when maintaining or extending this skill.
 
 ## Workflow
@@ -76,6 +80,14 @@ Use references by need, not all at once:
 Determine the platform, source content, requested output, explicit style, explicit count, output location, and whether the Brand Plugin is disabled.
 
 If platform cannot be inferred, ask one concise question. If platform is clear and content is available, proceed without asking for confirmation.
+
+If Brand Plugin may be enabled for the selected or candidate style, run `node scripts/check-rsvg-convert.mjs`:
+
+- If it reports `rsvg-convert` is installed, briefly tell the user the environment is ready and they can trigger the flow with keywords such as `公众号配图`, `小红书配图`, `知乎配图`, or a style ID.
+- If it reports missing, ask the user whether to install the shown dependency command. Do not install without user approval.
+- After an install attempt, run `node scripts/check-rsvg-convert.mjs --record-attempt`.
+- If the second recorded install check still fails, stop the Brand Plugin path, show the manual install command from the script, and do not continue to branded deliverables.
+- If the selected style has Brand Plugin disabled, continue without blocking on `rsvg-convert`.
 
 Exit when:
 
@@ -110,6 +122,7 @@ Rules:
 - For Zhihu, use the fixed Zhihu style unless future style files add alternatives.
 
 Exit when one style file is selected and read completely.
+If the selected style has a machine-readable spec, read it before building the shot list and treat it as authoritative for canvas, safe area, fixed component reservations, and Brand Plugin enablement.
 
 ### 4. Select Anchors
 
@@ -145,6 +158,7 @@ The shot list is mandatory. Each image must contain:
 - QA risk
 
 Each image must express exactly one core idea. If one image contains multiple ideas, split or delete.
+Save the finalized shot list to `shot-list.md` in the output folder before generating images.
 
 ### 6. Compile Prompts
 
@@ -160,6 +174,7 @@ For each image, combine:
 - Negative constraints from the style and QA references
 
 Generate one prompt per image. Do not ask the image model to create an entire multi-image set in one call.
+Save each final single-image prompt under `prompts/`, for example `prompts/01-cover.md`, before calling native image generation.
 
 If a style file contains batch language such as "generate the whole set", treat it as planning guidance for count, sequence, and consistency. Still compile and generate one image at a time.
 
@@ -173,6 +188,8 @@ After each generation:
 
 - Save the image into the current project, not into the skill folder.
 - Recommended output path: `post-illustration-output/<content-slug>/`.
+- Save the finalized shot list as `shot-list.md`.
+- Save final prompts as `prompts/*.md`.
 - Save native generated images under `images/unbranded/` when Brand Plugin is enabled.
 - Save post-overlay deliverables under `images/branded/` when Brand Plugin is enabled.
 - If Brand Plugin is disabled, save deliverables under `images/`.
@@ -200,18 +217,19 @@ If the Brand Plugin is enabled and the selected Style Spec defines a brand slot:
 - Overlay the asset after image generation. Do not ask the image model to redraw the logo.
 - Use the selected Style Spec's slot, size, and safe-area rules.
 - Keep the unbranded generated image unless the user explicitly asks to replace it.
-- For the Xiaohongshu journal style, use `scripts/apply-brand-overlay.mjs` with `references/styles/xhs-style-journal.spec.json`.
+- For the WeChat doodle style, use `scripts/apply-brand-overlay.mjs` with `references/styles/wechat-style-doodle.spec.json`.
+- For the Xiaohongshu explainer notebook style, use `scripts/apply-brand-overlay.mjs` with `references/styles/xhs-style-explainer-notebook.spec.json`.
 - The overlay script has no npm dependency, but it requires `rsvg-convert` to be available on the machine.
 
 ### 8. QA And Fallback
 
-Check every image against `references/qa-checklist.md`.
+Check every image against `references/qa-checklist.md`. If the result has style drift, compare it with the selected style's Style Reference image and use only visual-system observations to adjust the next prompt.
 
 If an image fails, identify the reason before retrying:
 
 - Text error: reduce text, keep only short labels, regenerate.
 - Too many ideas: split or remove anchors.
-- Style drift: strengthen selected style source and negative constraints.
+- Style drift: inspect the Style Reference, ignore its semantic content, then strengthen selected style source and negative constraints.
 - Weak metaphor: rewrite physical action and object.
 - Brand or placeholder frame was drawn by the model: regenerate with stronger "no logo/no TF/no Tranfu/no placeholder frame/no reserve box" constraints, then apply the Brand Plugin overlay.
 - Brand overlay blocks content: use the Style Spec's reserved brand slot; if content occupies that slot, regenerate with a clearer reserved area.
@@ -226,6 +244,9 @@ Create or update `manifest.md` in the output folder with:
 - Platform
 - Style
 - Brand Plugin enabled/disabled
+- Machine Spec path, if any
+- Shot list path
+- Prompt path
 - Style QA status
 - Brand Plugin QA status, if enabled
 - Placement/sequence
@@ -254,4 +275,5 @@ Final response must include:
 - Brand Plugin is enabled by default only when the selected Style Spec defines a brand slot; it must obey that slot and must not behave as a global visual system.
 - The image model must not draw brand logos, page-number badges, placeholder frames, reserve boxes, or visible brand-slot markers.
 - Generate and QA one image at a time.
+- Save `shot-list.md`, `prompts/*.md`, and `manifest.md` for every run.
 - Save generated assets outside the skill folder.

@@ -31,25 +31,34 @@ content analysis
    - The style decides platform appearance, default image count, ratio, color values, typography, layout, safe areas, fixed component slots, and visual DNA.
    - Explicit user style/count instructions can override the default.
 
-3. Shot list is mandatory.
+3. Style Reference images are QA baselines, not generation inputs.
+   - Long-lived reference images live in `assets/style-references/`.
+   - Each routed style must have exactly one reference image.
+   - Specs should record the reference under `styleReference.image`; styles without a machine spec must list it in `references/style-index.md`.
+   - Reference images are used for style drift review and prompt correction only. Ignore their semantic content.
+   - Canvas size, geometry, slots, and palette values still come from the Style Spec, not from the reference image.
+
+4. Shot list is mandatory.
    - It is the stabilizing artifact between content understanding and image generation.
    - It prevents overstuffed images and repeated ideas.
 
-4. Content expression structure and visual metaphor are separate.
+5. Content expression structure and visual metaphor are separate.
    - Structure organizes information relationships.
    - Metaphor turns abstract content into a concrete scene.
 
-5. Brand Plugin is optional and slot-bound.
+6. Brand Plugin is optional and slot-bound.
    - Brand enablement and assets live in `references/brand.md`.
    - Brand assets live in `assets/brand/`.
    - The selected Style Spec controls brand placement and size.
    - Native image generation must not draw brand logos.
 
-6. Native Codex image generation is the primary generation path.
+7. Native Codex image generation is the primary generation path.
    - Other image skills are not part of the default route.
    - HTML/CSS rendering is not the main path for this skill.
    - Deterministic overlay scripts may be used for fixed components after generation.
    - `scripts/apply-brand-overlay.mjs` requires `rsvg-convert` and no npm package.
+   - `scripts/check-rsvg-convert.mjs` verifies that dependency and provides install guidance before Brand Plugin overlay work.
+   - If `rsvg-convert` is still unavailable after two recorded install checks, stop branded delivery and provide manual install instructions.
 
 ## Skill Folder Structure
 
@@ -61,8 +70,15 @@ post-illustration-images/
   assets/
     brand/
       tranfu-logo-reference.svg
+    style-references/
+      wechat-doodle.png
+      xhs-cream-paper.png
+      xhs-explainer-notebook.png
+      xhs-orange-card.png
+      zhihu-tech.png
   scripts/
     apply-brand-overlay.mjs
+    check-rsvg-convert.mjs
   references/
     brand.md
     content-structures.md
@@ -72,8 +88,9 @@ post-illustration-images/
     style-index.md
     styles/
       wechat-style-doodle.md
-      xhs-style-journal.md
-      xhs-style-journal.spec.json
+      wechat-style-doodle.spec.json
+      xhs-style-explainer-notebook.md
+      xhs-style-explainer-notebook.spec.json
       zhihu-style-title.md
 ```
 
@@ -83,6 +100,10 @@ Generated images should be saved in the user's current project, not inside the s
 
 ```text
 post-illustration-output/<content-slug>/
+  shot-list.md
+  prompts/
+    01-topic.md
+    02-topic.md
   images/
     unbranded/
       01-topic.png
@@ -100,7 +121,10 @@ When Brand Plugin is disabled, `images/` may contain the final PNG files directl
 - File
 - Platform
 - Style Spec
+- Machine Spec path, if any
 - Brand Plugin enabled/disabled
+- Shot list path
+- Prompt path
 - Sequence or placement
 - Core meaning
 - Content expression structure
@@ -115,8 +139,10 @@ To add a new visual style:
 
 1. Add the full style prompt to `references/styles/<style-id>.md`.
 2. Add a row to `references/style-index.md`.
-3. Include platform, default use, routing hints, and machine-readable Style Spec when scripts need fixed geometry.
-4. Do not copy the full style prompt into `SKILL.md`.
+3. Add one long-lived style reference image to `assets/style-references/<style-id>.png`.
+4. Include platform, default use, routing hints, Style Reference path, and machine-readable Style Spec when scripts need fixed geometry.
+5. If a machine spec exists, add `styleReference.image`, `styleReference.usage`, `styleReference.contentPolicy`, and `styleReference.isGenerationInput`.
+6. Do not copy the full style prompt into `SKILL.md`.
 
 To change brand behavior:
 
@@ -138,8 +164,10 @@ The skill is working when a fresh agent can:
 - Infer or ask for platform.
 - Read source content before choosing style.
 - Select one suite-level Style Spec.
+- Resolve one Style Reference image for the selected style and use it only for QA/failure review.
 - Produce a shot list before generation.
 - Generate one image prompt per shot.
+- Save `shot-list.md` and `prompts/*.md` before generation.
 - Keep the image set visually consistent.
 - Keep model-drawn brand and page-number badges out of generated images.
 - Apply Brand Plugin overlays only when enabled and only through the selected Style Spec's slot.
