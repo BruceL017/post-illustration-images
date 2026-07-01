@@ -15,7 +15,7 @@ function usage() {
   node scripts/apply-brand-overlay.mjs --input-dir unbranded --output-dir branded
 
 Options:
-  --style-spec <path>   Defaults to references/styles/xhs-style-journal.spec.json
+  --style-spec <path>   Defaults to references/styles/xhs-style-explainer-notebook.spec.json
   --brand-svg <path>    Defaults to assets/brand/tranfu-logo-reference.svg
 `);
 }
@@ -69,6 +69,32 @@ function listPngs(inputDir) {
   return output.split("\n").filter(Boolean).sort();
 }
 
+function dependencyInstallHint() {
+  try {
+    execFileSync("sh", ["-lc", "command -v brew"], { stdio: "ignore" });
+    return "Install it with: brew install librsvg";
+  } catch {
+    try {
+      execFileSync("sh", ["-lc", "command -v apt-get"], { stdio: "ignore" });
+      return "Install it with: sudo apt-get update && sudo apt-get install -y librsvg2-bin";
+    } catch {
+      return "Install librsvg with your system package manager, then make sure rsvg-convert is on PATH.";
+    }
+  }
+}
+
+function ensureRsvgConvert() {
+  try {
+    execFileSync("sh", ["-lc", "command -v rsvg-convert"], { stdio: "ignore" });
+  } catch {
+    throw new Error(`rsvg-convert is required for brand overlay but is not installed. ${dependencyInstallHint()}`);
+  }
+}
+
+function aspectRatioMatches(size, canvas, tolerance) {
+  return Math.abs(size.width / size.height - canvas.width / canvas.height) <= tolerance;
+}
+
 function renderOne({ input, output, spec, brandSvg }) {
   const canvas = spec.canvas;
   const slot = spec.fixedComponents?.brandSlot;
@@ -76,11 +102,17 @@ function renderOne({ input, output, spec, brandSvg }) {
     throw new Error(`Style Spec ${spec.id} has no enabled brandSlot`);
   }
 
+  ensureRsvgConvert();
+
   const size = readPngSize(input);
   if (size.width !== canvas.width || size.height !== canvas.height) {
-    throw new Error(
-      `${basename(input)} is ${size.width}x${size.height}, expected ${canvas.width}x${canvas.height} from Style Spec ${spec.id}`
-    );
+    const canResize = spec.inputHandling?.allowSameAspectRatioResize === true;
+    const tolerance = spec.inputHandling?.ratioTolerance ?? 0.001;
+    if (!canResize || !aspectRatioMatches(size, canvas, tolerance)) {
+      throw new Error(
+        `${basename(input)} is ${size.width}x${size.height}, expected ${canvas.width}x${canvas.height} from Style Spec ${spec.id}`
+      );
+    }
   }
 
   mkdirSync(dirname(output), { recursive: true });
@@ -110,7 +142,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const styleSpecPath = args["style-spec"]
     ? resolvePath(args["style-spec"])
-    : defaultPath("references/styles/xhs-style-journal.spec.json");
+    : defaultPath("references/styles/xhs-style-explainer-notebook.spec.json");
   const brandSvgPath = args["brand-svg"]
     ? resolvePath(args["brand-svg"])
     : defaultPath("assets/brand/tranfu-logo-reference.svg");

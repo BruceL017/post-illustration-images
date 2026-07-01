@@ -6,6 +6,8 @@ Do not ask the image model to create fixed brand components. Logos, `TF`, `Tranf
 
 Some style files may be written as "generate a whole set" prompts. Use those passages to infer default count, sequence logic, and set consistency, but never pass a batch-generation instruction into a single image prompt.
 
+Save each compiled single-image prompt under the output folder's `prompts/` directory before image generation, using the same sequence prefix as the target image filename.
+
 ## Prompt Assembly Order
 
 1. Platform and purpose.

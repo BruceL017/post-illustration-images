@@ -1,6 +1,6 @@
 {
-  "id": "xhs-kepu",
-  "styleFile": "references/styles/xhs-style-journal.md",
+  "id": "xhs-explainer-notebook",
+  "styleFile": "references/styles/xhs-style-explainer-notebook.md",
   "platform": "xiaohongshu",
   "canvas": {
     "width": 1086,
@@ -57,5 +57,11 @@
     "forbidModelDrawnBrand": true,
     "forbidPageNumberBadge": true,
     "keepBrandReservedAreaClear": true
+  },
+  "styleReference": {
+    "image": "assets/style-references/xhs-explainer-notebook.png",
+    "usage": "QA and failure review only; do not use as generation input or copy its content.",
+    "contentPolicy": "Ignore all semantic content in the reference image. Compare only baseline visual elements, palette, composition language, texture, typography feel, icon/illustration style, spacing, and fixed-component treatment.",
+    "isGenerationInput": false
   }
 }
