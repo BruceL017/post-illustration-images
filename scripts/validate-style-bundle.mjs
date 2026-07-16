@@ -64,6 +64,18 @@ export const PLATFORM_BASELINES = Object.freeze({
     contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
     brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
     brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+  }),
+  toutiao: Object.freeze({
+    specPlatform: "toutiao",
+    width: 1600,
+    height: 900,
+    ratio: "16:9",
+    orientation: "horizontal",
+    sizing: "flexible",
+    minShortEdge: 900,
+    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
+    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
+    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
   })
 });
 
@@ -332,10 +344,13 @@ function validateSpec({ spec, style, baseline, enforceBaselineCanvas }) {
 
   const handling = spec.inputHandling;
   invariant(handling && typeof handling === "object", "style.spec.json inputHandling is required");
-  invariant(handling.allowSameAspectRatioResize === true, "style.spec.json inputHandling.allowSameAspectRatioResize must be true");
+  invariant(handling.preserveNativeOutput === true, "style.spec.json inputHandling.preserveNativeOutput must be true");
   invariant(handling.ratioTolerance === 0.002, "style.spec.json inputHandling.ratioTolerance must be 0.002");
-  invariant(handling.withinToleranceResizeMode === "scale-to-canvas", "style.spec.json inputHandling.withinToleranceResizeMode must be scale-to-canvas");
-  invariant(handling.outputCanvasIsAuthoritative === true, "style.spec.json inputHandling.outputCanvasIsAuthoritative must be true");
+  invariant(handling.outputCanvasRole === "design-coordinate-system", "style.spec.json inputHandling.outputCanvasRole must be design-coordinate-system");
+  invariant(handling.allowPostGenerationResize === false, "style.spec.json inputHandling.allowPostGenerationResize must be false");
+  if (baseline.minShortEdge) {
+    invariant(handling.minShortEdge === baseline.minShortEdge, `style.spec.json inputHandling.minShortEdge must be ${baseline.minShortEdge}`);
+  }
   invariant(handling.allowCrop === false, "style.spec.json inputHandling.allowCrop must be false");
   invariant(handling.allowPadding === false, "style.spec.json inputHandling.allowPadding must be false");
   invariant(handling.allowRotation === false, "style.spec.json inputHandling.allowRotation must be false");
@@ -391,7 +406,7 @@ function validateReviews(reviews, provenance) {
   invariant(originality.limitation === (imageMode ? null : "source-pixels-unavailable"), "qa.json originality limitation is invalid");
 }
 
-function validateQa({ qa, bundleDir, canvas, styleReferencePath, provenance }) {
+function validateQa({ qa, bundleDir, canvas, ratioTolerance, minShortEdge, styleReferencePath, provenance }) {
   invariant(qa?.schemaVersion === 1, "qa.json schemaVersion must be 1");
   validateReviews(qa.reviews, provenance);
   validateGates(qa.hard_gates, "qa.json hard_gates");
@@ -409,7 +424,8 @@ function validateQa({ qa, bundleDir, canvas, styleReferencePath, provenance }) {
     const imagePath = requireFile(bundleDir, image.file, `calibration image ${image.id}`);
     requireNonemptyFile(bundleDir, image.prompt_file, `calibration prompt ${image.id}`);
     const size = readPngSize(imagePath, `calibration image ${image.id}`);
-    invariant(size.width === canvas.width && size.height === canvas.height, `calibration image ${image.id} must be ${canvas.width}x${canvas.height}`);
+    invariant(Math.abs(size.width / size.height - canvas.width / canvas.height) <= ratioTolerance, `calibration image ${image.id} aspect ratio is outside tolerance`);
+    if (minShortEdge) invariant(Math.min(size.width, size.height) >= minShortEdge, `calibration image ${image.id} short edge must be at least ${minShortEdge}px`);
     invariant(Number.isFinite(image.total_score) && image.total_score >= 85 && image.total_score <= 100, `qa.json ${image.id}.total_score must be between 85 and 100`);
     validateScores(image.scores, `qa.json ${image.id}.scores`);
     const dimensionMean = scoreDimensions.reduce((sum, dimension) => sum + image.scores[dimension], 0) / scoreDimensions.length;
@@ -417,7 +433,7 @@ function validateQa({ qa, bundleDir, canvas, styleReferencePath, provenance }) {
     validateGates(image.hard_gates, `qa.json ${image.id}.hard_gates`);
     invariant(typeof image.generation?.backend === "string" && image.generation.backend.trim(), `qa.json ${image.id} generation.backend is required`);
     invariant(typeof image.generation?.model === "string" && image.generation.model.trim(), `qa.json ${image.id} generation.model is required`);
-    invariant(image.generation.width === canvas.width && image.generation.height === canvas.height, `qa.json ${image.id} generation dimensions must match the canvas`);
+    invariant(image.generation.width === size.width && image.generation.height === size.height, `qa.json ${image.id} generation dimensions must match the actual PNG`);
     byId.set(image.id, { image, imagePath });
   }
   invariant(calibrationIds.every((id) => byId.has(id)), "qa.json must include concept, process, and checklist images");
@@ -514,6 +530,8 @@ function validateRegistryShape(registry) {
     invariant(platform.specPlatform === baseline.specPlatform, `style-registry.json ${platform.id} specPlatform is invalid`);
     invariant(platform.canvas?.width === baseline.width && platform.canvas?.height === baseline.height, `style-registry.json ${platform.id} baseline canvas is invalid`);
     invariant(platform.canvas?.ratio === baseline.ratio && platform.canvas?.orientation === baseline.orientation, `style-registry.json ${platform.id} baseline ratio is invalid`);
+    if (baseline.sizing) invariant(platform.canvas?.sizing === baseline.sizing, `style-registry.json ${platform.id} baseline sizing is invalid`);
+    if (baseline.minShortEdge) invariant(platform.canvas?.minShortEdge === baseline.minShortEdge, `style-registry.json ${platform.id} baseline short edge is invalid`);
   }
   const styleIds = registry.styles.map((style) => style.id);
   invariant(styleIds.every((id) => typeof id === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)), "style-registry.json has an invalid style ID");
@@ -583,7 +601,7 @@ function validateCandidate(candidate) {
   invariant(style && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(style.id), "candidate.json style.id is invalid");
   invariant(typeof style.displayName === "string" && style.displayName.trim(), "candidate.json style.displayName is required");
   invariant(typeof style.defaultUse === "string" && style.defaultUse.trim(), "candidate.json style.defaultUse is required");
-  invariant(PLATFORM_BASELINES[style.platform], "candidate.json style.platform must be wechat, xhs, zhihu, or weibo");
+  invariant(PLATFORM_BASELINES[style.platform], "candidate.json style.platform is unsupported");
   invariant(style.makeDefault === undefined || typeof style.makeDefault === "boolean", "candidate.json style.makeDefault must be boolean when present");
   validateAliases(style.aliases, "candidate style.aliases");
   invariant(style.brandPolicy && typeof style.brandPolicy.defaultEnabled === "boolean", "candidate.json style.brandPolicy.defaultEnabled must be boolean");
@@ -629,10 +647,19 @@ export function validateStyleBundle({ bundleDir, skillRoot = defaultSkillRoot, r
 
   const referencePath = resolveSafePath(resolvedBundle, candidate.files.styleReference, "candidate files.styleReference");
   const referenceSize = readPngSize(referencePath, "calibration/style-reference.png");
-  invariant(referenceSize.width === spec.canvas.width && referenceSize.height === spec.canvas.height, `calibration/style-reference.png must be ${spec.canvas.width}x${spec.canvas.height}`);
+  invariant(Math.abs(referenceSize.width / referenceSize.height - spec.canvas.width / spec.canvas.height) <= spec.inputHandling.ratioTolerance, "calibration/style-reference.png aspect ratio is outside tolerance");
+  if (spec.inputHandling.minShortEdge) invariant(Math.min(referenceSize.width, referenceSize.height) >= spec.inputHandling.minShortEdge, `calibration/style-reference.png short edge must be at least ${spec.inputHandling.minShortEdge}px`);
 
   const qaPath = resolveSafePath(resolvedBundle, candidate.files.qa, "candidate files.qa");
-  validateQa({ qa: readJson(qaPath, "qa.json"), bundleDir: resolvedBundle, canvas: spec.canvas, styleReferencePath: referencePath, provenance });
+  validateQa({
+    qa: readJson(qaPath, "qa.json"),
+    bundleDir: resolvedBundle,
+    canvas: spec.canvas,
+    ratioTolerance: spec.inputHandling.ratioTolerance,
+    minShortEdge: spec.inputHandling.minShortEdge,
+    styleReferencePath: referencePath,
+    provenance
+  });
 
   const allowedPngs = new Set([
     candidate.files.styleReference,
@@ -694,6 +721,7 @@ export function validateInstalledRegistry({ skillRoot = defaultSkillRoot, regist
     invariant(spec.styleReference.image === entry.styleReference, `Registry ${entry.id} styleReference differs from its spec`);
     const size = readPngSize(resolveSafePath(resolvedSkillRoot, entry.styleReference, `Registry ${entry.id} styleReference`), `Style reference for ${entry.id}`);
     invariant(Math.abs(size.width / size.height - spec.canvas.width / spec.canvas.height) <= 0.002, `Style reference for ${entry.id} has the wrong aspect ratio`);
+    if (spec.inputHandling.minShortEdge) invariant(Math.min(size.width, size.height) >= spec.inputHandling.minShortEdge, `Style reference for ${entry.id} has a short edge below ${spec.inputHandling.minShortEdge}px`);
   }
 
   return { registryPath: registryFile, styles: registry.styles.length };

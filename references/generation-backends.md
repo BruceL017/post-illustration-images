@@ -10,6 +10,7 @@ Use this reference to resolve and verify image generation execution. It defines 
 - Credentials, endpoint, and model availability
 - `gpt-image-2` generation geometry
 - Output geometry, retries, and failure codes
+- Platform delivery compatibility
 
 ## Boundary
 
@@ -48,6 +49,7 @@ model_preference: <configured/user model id or null>
 model_preference_source: user | active-config | none
 resolved_model: <verified image model id>
 model_resolution_note: unchanged | preferred-unavailable-selected-current | backend-default-resolved
+artifact_format: png | jpeg | other-supported-raster
 credential_access: pass | fail
 model_check: pass | fail
 process_cleanup_plan: pass | fail
@@ -110,7 +112,7 @@ For the built-in production styles, require the `gpt-image-2` geometry profile. 
 
 ## `gpt-image-2` Generation Geometry
 
-Read `references/gpt-image-2-geometry.spec.json` and run `scripts/resolve-generation-geometry.mjs` after the Style Spec is selected. The resolver maps the final Style Spec ratio to a valid API request:
+Read `references/gpt-image-2-geometry.spec.json` and run `scripts/resolve-generation-geometry.mjs` after the Style Spec is selected. The resolver maps the Style Spec target ratio to a valid API request:
 
 | Style ratio | Request dimensions |
 |---|---:|
@@ -122,17 +124,33 @@ These are request dimensions, not promised output dimensions. The configured gat
 
 ## Output Geometry
 
-The Style Spec owns final geometry. `GenerationGeometry` owns the API request. The backend response is only a source artifact.
+The Style Spec canvas is a design coordinate system. `GenerationGeometry` owns the API request. An accepted backend raster owns delivery pixel dimensions.
 
-1. Record requested dimensions before generation and actual source width, height, and aspect ratio after it.
-2. If source dimensions exactly match the Style Spec, pass the size check.
-3. If dimensions differ but aspect ratio matches within the Style Spec tolerance, retain the source and scale it to the final canvas as `pass-normalized`. This bounded correction may remove sub-tolerance aspect drift; it is not permission to accept a source outside tolerance.
-4. Reject output outside ratio tolerance. Do not crop, rotate, pad, or stretch it; retry the same canonical request with stronger orientation/ratio wording.
-5. Allow at most three submitted image candidates per image, then stop as `BLOCKER: backend output ratio mismatch` without asking the user to select a size.
-6. Record `requested_dimensions`, `source_dimensions`, `final_dimensions`, normalization action, structured geometry attempts, and flat bundle-level `brand_overlay_renderer: resvg-wasm@2.6.2` in `manifest.md`.
-7. Run `scripts/apply-brand-overlay.mjs` for every accepted source. Use `--skip-brand false` to normalize and apply the real asset when branding is enabled; use `--skip-brand true` to normalize without reading or applying a brand asset when it is disabled.
-8. The finalizer loads vendored `@resvg/resvg-wasm@2.6.2` in-process and requires Node.js 22+. It needs no runtime `npm install`, native SVG renderer, network access, or API key; generation-backend credentials remain a separate concern.
-9. Never claim the requested generation size was honored without inspecting the actual PNG.
+1. Record requested dimensions before generation and actual source format, width, height, and aspect ratio after it.
+2. If the actual ratio matches within `ratioTolerance` and any configured `minimum_short_edge` is met, accept it as `pass-native`; `delivery_dimensions` equals `source_dimensions`.
+3. Reject output outside ratio tolerance or below the configured minimum edge. Retry the same canonical request with stronger geometry wording; never crop, pad, rotate, stretch, resize, or upscale it.
+4. Allow at most three submitted image candidates per image, then stop as `BLOCKER: backend output geometry mismatch` without asking the user to select a size.
+5. When branding is disabled, deliver the accepted source directly and do not invoke a raster renderer.
+6. When branding is enabled, require the verified backend artifact contract to materialize PNG, then run `scripts/apply-brand-overlay.mjs`. Do not silently convert a JPEG source; stop as `BLOCKER: brand overlay input format unavailable`. The overlay must return exactly the source width and height.
+7. Record `requested_dimensions`, `source_dimensions`, `delivery_dimensions`, `native_output_preserved`, ordered `post_generation_actions`, structured geometry attempts, and any overlay renderer or hard-limit exporter used.
+8. Never claim the requested generation size was honored without inspecting the actual raster.
+
+## Platform Delivery Compatibility
+
+Accepted source geometry remains native. Platform format and byte limits never authorize automatic crop, padding, rotation, stretch, resizing, or upscaling.
+
+| Platform and publishing path | Native geometry policy | Format or byte adaptation only when required |
+|---|---|---|
+| WeChat web editor | No exact body-image pixel requirement; accept an in-tolerance raster such as `1448x1086`. | BMP, PNG, JPEG, JPG, or GIF, at most 5 MiB. |
+| WeChat permanent-material API | Same native geometry policy. | JPG or PNG below 1 MiB; convert or compress without changing width and height when necessary. |
+| Xiaohongshu image post | No exact `1080x1440` requirement; accept an in-tolerance raster such as `1086x1448`. | PNG or JPEG; current uploader checks are publishing constraints, not a resize mandate. |
+| Zhihu body image | No exact body-image pixel requirement; accept `2048x1152` and in-tolerance `1672x941` natively. | Use a same-dimension PNG/JPEG export only when the active upload path rejects the source. |
+
+Choose the rule only when `IntakeContext.publishing_path` identifies the actual path. If it is `null`, deliver the native artifact and do not ask for a path merely to speculate about compression. If the source already passes a known path's format and byte limit, perform no export. If an export is required, first verify an available exporter can preserve width and height while meeting that exact format/byte limit; otherwise stop as `BLOCKER: required hard-limit export unavailable`. Record the exporter, append `hard-limit-export` to `post_generation_actions`, and verify output dimensions. A branded export may record both `brand-overlay-native` and `hard-limit-export` in execution order. Compression or conversion is not geometry normalization.
+
+No Weibo or Toutiao uploader limit is bundled yet. Do not invent one: format/byte adaptation requires a verified publishing path, while `publishing_path: null` keeps native delivery. Toutiao's `minShortEdge: 900` is an internal style quality floor enforced in calibration and production, not a claim about the uploader.
+
+Sources checked for this policy: [WeChat web editor image requirements](https://kf.qq.com/faq/161220AVNfeI161220AVvAr6.html), [WeChat permanent-material image API](https://developers.weixin.qq.com/doc/service/api/material/permanent/api_uploadimage), [Xiaohongshu creator image publisher](https://creator.xiaohongshu.com/publish/publish?target=image), and [Zhihu creator manual](https://www.zhihu.com/knowledge-plan/manual). Xiaohongshu and Zhihu uploader behavior must be rechecked when their active frontend changes; do not turn an observed uploader threshold into a timeless contract.
 
 ## Retries And Process Cleanup
 
@@ -157,9 +175,10 @@ The Style Spec owns final geometry. `GenerationGeometry` owns the API request. T
 | Explicitly required model has no active channel | `BLOCKER: backend model channel unavailable` |
 | Resolved model or ratio has no verified geometry profile | `BLOCKER: backend geometry profile unavailable` |
 | Request returns no current valid raster artifact | `BLOCKER: backend output unavailable` |
-| Source aspect ratio conflicts with the Style Spec | `BLOCKER: backend output ratio mismatch` |
-| Node.js 22+ or the vendored finalizer is unavailable | `BLOCKER: required brand overlay unavailable` when branding is enabled; otherwise `BLOCKER: output normalization unavailable` |
-| Source within ratio tolerance needs normalization but no deterministic normalizer exists | `BLOCKER: output normalization unavailable` |
+| Source ratio or configured minimum edge conflicts with the Style Spec | `BLOCKER: backend output geometry mismatch` |
+| Branding is enabled but the backend cannot materialize PNG | `BLOCKER: brand overlay input format unavailable` |
+| A known publishing limit requires export but no same-dimension exporter is available | `BLOCKER: required hard-limit export unavailable` |
+| Node.js 22+ or the vendored finalizer is unavailable | `BLOCKER: required brand overlay unavailable` only when branding is enabled |
 | A process started by the run cannot be stopped | `BLOCKER: backend process cleanup failed` |
 
 Always name the observed layer: adapter, configuration, credential access, endpoint, model, artifact, geometry, or process cleanup. Never reduce all of these to “native image generation unavailable.”

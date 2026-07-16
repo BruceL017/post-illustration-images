@@ -64,16 +64,16 @@ All paths stored in the bundle must be relative POSIX paths without `..`, backsl
 ```
 
 - `style.id` must match `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
-- `style.platform` is exactly `wechat`, `xhs`, `zhihu`, or `weibo`.
+- `style.platform` is exactly `wechat`, `xhs`, `zhihu`, `weibo`, or `toutiao`.
 - `style.makeDefault` is optional and must be boolean when present. It behaves as `false` when absent. The first installed style for an unregistered supported platform becomes that platform's default regardless, because the registry cannot expose a platform without a usable default.
 - Installation requires `status: "approved"` and `template_ready: true`.
 - `humanApproval.status` must be `approved` and `approvedAt` must be an ISO 8601 timestamp.
 - `style.aliases` must contain unique, non-empty strings. `style.displayName` and `style.defaultUse` are required.
 - Every `files` value is a safe relative path and resolves to a required bundle file.
 
-## Platform geometry
+## Platform design geometry
 
-New candidates use the platform baseline, not the source image dimensions:
+New candidates use the platform baseline as a design coordinate system, not as required delivery pixels:
 
 | Target platform | Spec platform | Canvas | Ratio | Orientation |
 |---|---|---|---|---|
@@ -81,10 +81,11 @@ New candidates use the platform baseline, not the source image dimensions:
 | `xhs` | `xiaohongshu` | `1080 x 1440` | `3:4` | vertical |
 | `zhihu` | `zhihu` | `1600 x 900` | `16:9` | horizontal |
 | `weibo` | `weibo` | `1600 x 900` | `16:9` | horizontal |
+| `toutiao` | `toutiao` | `1600 x 900` | `16:9` | horizontal |
 
-`style.spec.json` must use the candidate ID, the mapped spec platform, and the exact baseline canvas. `styleFile` must be `references/styles/<style_id>.md`. Every rectangle under `layout`, including `contentSafeArea` and `brandReservedArea`, must have positive finite dimensions and stay inside the canvas.
+`style.spec.json` must use the candidate ID, the mapped spec platform, and the exact baseline design canvas. `styleFile` must be `references/styles/<style_id>.md`. Every rectangle under `layout`, including `contentSafeArea` and `brandReservedArea`, must have positive finite dimensions and stay inside that coordinate system.
 
-The content safe area, brand reserved area, and brand slot must equal the platform baseline. `inputHandling` must enable `allowSameAspectRatioResize`, use tolerance `0.002` and `scale-to-canvas`, mark the output canvas authoritative, forbid crop/padding/rotation/wrong-ratio stretching, and use `wrongRatioAction: "regenerate"`.
+The content safe area, brand reserved area, and brand slot must equal the platform baseline. `inputHandling` must set `preserveNativeOutput: true`, `outputCanvasRole: "design-coordinate-system"`, `allowPostGenerationResize: false`, and `ratioTolerance: 0.002`; it must forbid crop, padding, rotation, and wrong-ratio stretching and use `wrongRatioAction: "regenerate"`. An accepted model raster owns its delivery pixel dimensions. Toutiao additionally uses `minShortEdge: 900` as an internal calibration quality floor, not an uploader limit.
 
 The Weibo baseline uses content safe area `{ "x": 80, "y": 70, "width": 1440, "height": 760 }`, brand reserved area `{ "x": 1320, "y": 44, "width": 240, "height": 100 }`, and brand slot `{ "x": 1350, "y": 64, "width": 170, "height": 46 }`.
 
@@ -127,7 +128,7 @@ It also records separate `reviews.style` and `reviews.originality` runs with dif
 - Every `dimension_averages` and per-image `scores` value is at least `75`.
 - Every image `total_score` is at least `85`; `average_score` is at least `88`.
 - Every item under top-level and per-image `hard_gates` is a pass flag and must be `true`: `dimensions`, `aspect_ratio`, `safe_area`, `single_core_meaning`, `identity_leakage`, and `brand_free`. Here `identity_leakage: true` means the no-leakage check passed.
-- Each image records a non-empty generation backend and model plus dimensions matching the final canvas.
+- Each image records a non-empty generation backend and model plus dimensions matching the actual calibration PNG. Calibration images and the selected Style Reference must match the design canvas ratio within tolerance; they do not need to equal its pixel dimensions.
 - `selected_reference.image_id` selects one of the three images, `source_image` matches that image's file, `path` is `calibration/style-reference.png`, and `unbranded` is `true`.
 - Image `file` and `prompt_file` values must be the canonical paths shown in the required layout.
 - `contact_sheet` must be `calibration/contact-sheet.png`; it is a valid PNG used only for human comparison and is never installed as the formal style reference.
@@ -150,4 +151,4 @@ Install after approval:
 node scripts/install-style-bundle.mjs --bundle /path/to/bundle
 ```
 
-The installer holds one skill-root install lock, copies the style Markdown, spec JSON, provenance JSON, and selected reference PNG; appends one registry entry; regenerates `style-index.md`; validates the complete installed registry; and marks the candidate `installed`. On the first approved Weibo install it also adds the `weibo` platform with display name `Weibo`, baseline geometry, routing phrases `微博`, `微博配图`, `微博信息流配图`, and `微博横版信息图`, and sets the new style as its default. On an existing platform, `style.makeDefault: true` changes that platform's default; absent or false preserves it. It refuses concurrent installation, an existing ID, path, alias collision, or destination file. If any install step fails, it removes files created by that attempt and restores the prior registry, generated index, and candidate metadata, including platform/default changes.
+The installer holds one skill-root install lock, copies the style Markdown, spec JSON, provenance JSON, and selected reference PNG; appends one registry entry; regenerates `style-index.md`; validates the complete installed registry; and marks the candidate `installed`. The first approved Weibo or Toutiao style also registers that platform and makes the new style its default. On an existing platform, `style.makeDefault: true` changes that platform's default; absent or false preserves it. It refuses concurrent installation, an existing ID, path, alias collision, or destination file. If any install step fails, it removes files created by that attempt and restores the prior registry, generated index, and candidate metadata, including platform/default changes.

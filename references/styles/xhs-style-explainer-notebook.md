@@ -37,7 +37,7 @@
 
 ## 1. 画布
 
-- Final delivery canvas: `1086 x 1448 px`; the generation request size is resolved separately
+- Design-coordinate canvas: `1086 x 1448 px`; accepted model output keeps its native pixel dimensions
 - Ratio: `3:4`
 - Orientation: vertical
 - Recommended output: PNG
@@ -87,7 +87,7 @@
 
 - 竖版构图
 - 适合小红书滑动阅读
-- 最终交付尺寸固定为 1086 x 1448 px，不把该值直接当作模型请求尺寸
+- 设计坐标画布为 1086 x 1448 px；模型请求尺寸单独解析，宽高比合格的返回保留原生像素
 - 固定比例为 3:4
 - 画面结构为：外层粉色背景 + 中央白色笔记纸主体
 

@@ -36,3 +36,9 @@ jobs:
 
       - name: Run brand overlay regression tests
         run: node --test scripts/test-brand-overlay.mjs
+
+      - name: Run skill contract tests
+        run: node --test tests/brand-policy.test.mjs tests/generation-geometry.test.mjs tests/style-bundle.test.mjs
+
+      - name: Validate installed style registry
+        run: node scripts/validate-style-bundle.mjs --installed

@@ -51,10 +51,10 @@ When Brand Plugin resolves enabled, additionally require the selected Style Spec
 
 ## Overlay Rule
 
-After image generation, overlay the real brand asset using the selected Style Spec's top-right `brandSlot` before delivery. Do not scale, move, recolor, or restyle the brand according to a global coordinate rule. If the slot is too large, too small, or poorly placed, fix the Style Spec, not this Brand Plugin.
+When branding is enabled, overlay the real brand asset using the selected Style Spec's top-right `brandSlot` before delivery. Map that design-space slot proportionally onto the source raster; the overlay canvas and output must remain exactly the source width and height. Do not recolor or restyle the brand. If the slot is too large, too small, or poorly placed, fix the Style Spec, not this Brand Plugin.
 
 The deterministic overlay must reject a Style Spec when its brand slot is disabled, not anchored at top-right, outside the matching reserved area or canvas, outside the top-right quadrant, or when `keepBrandReservedAreaClear` is not `true`.
 
-`scripts/apply-brand-overlay.mjs` loads vendored `@resvg/resvg-wasm@2.6.2` from `vendor/resvg-wasm/` under Node.js 22+. It requires no runtime `npm install`, native SVG renderer, network access, or API key. `--skip-brand false` applies the real asset; `--skip-brand true` skips reading and applying it while preserving deterministic final sizing.
+`scripts/apply-brand-overlay.mjs` loads vendored `@resvg/resvg-wasm@2.6.2` from `vendor/resvg-wasm/` under Node.js 22+. It requires no runtime `npm install`, native SVG renderer, network access, or API key. It is an overlay-only tool and must preserve source dimensions.
 
-If Node.js 22+ or the vendored renderer is unavailable, stop as `BLOCKER: required brand overlay unavailable` when branding resolves enabled. A disabled brand state does not bypass final sizing; the normalization-only path stops as `BLOCKER: output normalization unavailable`.
+If Node.js 22+ or the vendored renderer is unavailable, stop as `BLOCKER: required brand overlay unavailable` only when branding resolves enabled. When branding resolves disabled, deliver the accepted model raster directly and do not run the finalizer.

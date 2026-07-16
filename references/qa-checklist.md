@@ -1,6 +1,6 @@
 # QA Checklist
 
-Run QA after each image, after overlay when `brand_enabled` is true, and before delivery. Skip only overlay-specific checks when `brand_enabled` is false; final sizing QA always runs.
+Run QA after each image, after overlay when `brand_enabled` is true, and before delivery. Skip overlay checks when branding is false; native geometry QA always runs.
 
 ## Backend And Artifact QA
 
@@ -9,10 +9,11 @@ Run QA after each image, after overlay when `brand_enabled` is true, and before 
 - The resolved model is currently image-capable; a stored default alone is not accepted as proof. Any difference between model preference and resolved model is recorded with its reason.
 - `GenerationGeometry` comes from the verified model profile, and its request size satisfies that profile before submission.
 - The image artifact belongs to the current prompt/request, not a stale cache or earlier run.
-- The source file is a readable raster image and its actual dimensions plus aspect ratio are recorded.
-- Exact Style Spec dimensions pass as `pass-exact`. A different size within ratio tolerance is finalized automatically as `pass-normalized`; requested, source, and final dimensions are recorded.
-- Output outside ratio tolerance fails QA and is never cropped, padded, rotated, or stretched. It is retried with the canonical request size, then blocked after the three-candidate limit without a size question.
-- The vendored `resvg-wasm@2.6.2` finalizer produces the exact Style Spec canvas with brand overlay enabled or with `--skip-brand true` when branding is disabled.
+- The source file is a readable raster image and its actual format, dimensions, and aspect ratio are recorded. Branding requires a PNG source; unbranded delivery keeps the native extension.
+- Any source within the Style Spec ratio tolerance and at or above a configured minimum short edge passes as `pass-native`; requested, source, and delivery dimensions are recorded, and delivery dimensions equal source dimensions.
+- Output outside ratio tolerance or below the minimum edge fails QA and is never resized, cropped, padded, rotated, stretched, or upscaled. It is retried with the canonical request size, then blocked after the three-candidate limit without a size question.
+- When branding is enabled, the vendored `resvg-wasm@2.6.2` overlay preserves the source width and height. When branding is disabled, no renderer runs.
+- A `hard-limit-export` runs only for a known publishing path through a verified same-dimension exporter; the exporter and final format/bytes are recorded, or delivery stops with its precise blocker.
 - The request process exited and no child process started by the request remains active.
 - Saved prompts, manifests, logs, and delivery notes contain no credentials or secret fragments.
 
@@ -31,12 +32,12 @@ Run QA after each image, after overlay when `brand_enabled` is true, and before 
 
 ## Style Spec QA
 
-- Canvas size and page orientation follow the selected Style Spec exactly.
+- Target ratio, orientation, and design-coordinate layout follow the selected Style Spec; delivery pixels remain native.
 - Fixed palette follows the selected Style Spec closely enough for the platform template.
 - The selected style has one Style Reference image, and the generated image matches its baseline visual system.
 - Style Reference comparison ignores semantic content and checks only palette, texture, spacing, typography feel, icon/illustration style, composition language, and non-brand fixed-component treatment.
 - Style Reference watermark presence, absence, and position are ignored; production branding is validated only against the selected Style Spec.
-- Content stays inside the selected Style Spec's content safe area.
+- Content stays inside the proportional mapping of the Style Spec's design-space content safe area onto the native raster.
 - Active fixed component reserved areas stay clear. When Brand Plugin resolves disabled, do not enforce the brand slot or brand reserved area.
 - Page-number badges are absent unless the selected Style Spec explicitly enables them.
 - Template-level components do not move randomly between images.
@@ -65,7 +66,7 @@ When branding resolves false, record `brand_qa_status: disabled-by-user` for a u
 - Sequence has a clear reading order through filenames and manifest records, not through model-drawn page badges.
 - No two images repeat the same core meaning.
 - Filename order matches the sequence.
-- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, flat `brand_overlay_renderer: resvg-wasm@2.6.2`, Brand Plugin default/override/source/final state, QA statuses, and residual risks.
+- `manifest.md` records platform, publishing path or `null`, selected Style Spec, verified backend/model, source/delivery artifact formats and bytes, requested/source/delivery dimensions, optional hard-limit exporter, geometry attempts, native-output status, post-generation actions, brand state, overlay renderer when used, QA statuses, and residual risks.
 
 ## Fallback Rules
 
@@ -77,13 +78,13 @@ When branding resolves false, record `brand_qa_status: disabled-by-user` for a u
 | Weak metaphor | Rewrite as physical action plus concrete object. |
 | Looks like PPT | Reduce grid density, title bars, and rigid arrows; emphasize scene/object. |
 | Model drew logo, `TF`, `Tranfu`, or watermark | Regenerate with stronger fixed-component negative constraints. |
-| Model drew a brand-slot placeholder frame, reserve box, or guide outline | Regenerate with explicit "no placeholder frame/no reserve box/no visible brand-slot marker" constraints before overlay. |
+| Model drew a brand-slot placeholder frame, reserve box, or guide outline | Regenerate with explicit "no placeholder frame/no reserve box/no visible brand-slot marker" constraints; overlay afterward only when branding is enabled. |
 | Brand overlay blocks content | Regenerate with the Style Spec brand slot kept clear, or revise that Style Spec's slot. |
 | Page-number badge appears | Regenerate with page badge forbidden. |
-| Output ratio falls outside the Style Spec tolerance | Retry the same canonical request size with stronger orientation/ratio wording; never ask the user to choose a size. |
+| Output ratio falls outside tolerance or misses the minimum edge | Retry the same canonical request size with stronger geometry wording; never ask the user to choose a size. |
 | Layout is empty | Add one content card, conclusion bar, icon group, or action detail. |
 | Layout is crowded | Remove secondary labels and reduce visual elements. |
 
 Do not retry blindly. Each regeneration must name the failure being corrected.
 
-If the user requires existing content to remain unchanged, avoid full-image regeneration for a local brand-slot artifact. Restore the original unbranded image, remove only the artifact using same-image paper/background texture, then rerun the deterministic brand overlay and QA the slot again.
+If the user requires existing content to remain unchanged, avoid full-image regeneration for a local brand-slot artifact. Restore the original unbranded image and remove only the artifact using same-image texture; rerun the overlay and slot QA only when branding is enabled.

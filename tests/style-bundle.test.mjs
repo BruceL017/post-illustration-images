@@ -41,6 +41,26 @@ const platformFixtures = Object.freeze({
     contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
     brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
     brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+  }),
+  toutiao: Object.freeze({
+    specPlatform: "toutiao",
+    canvas: Object.freeze({ width: 1600, height: 900, ratio: "16:9", orientation: "horizontal" }),
+    outputCanvas: Object.freeze({ width: 1672, height: 941 }),
+    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
+    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
+    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 }),
+    inputHandling: Object.freeze({
+      preserveNativeOutput: true,
+      ratioTolerance: 0.002,
+      outputCanvasRole: "design-coordinate-system",
+      allowPostGenerationResize: false,
+      minShortEdge: 900,
+      allowCrop: false,
+      allowPadding: false,
+      allowRotation: false,
+      allowWrongRatioStretch: false,
+      wrongRatioAction: "regenerate"
+    })
   })
 });
 
@@ -108,8 +128,9 @@ function createSkillRoot(t) {
   return root;
 }
 
-function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefault } = {}) {
+function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefault, outputCanvas } = {}) {
   const fixture = platformFixtures[platform];
+  const generatedCanvas = outputCanvas ?? fixture.outputCanvas ?? fixture.canvas;
   const root = mkdtempSync(resolve(tmpdir(), "post-style-bundle-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(resolve(root, "prompts"), { recursive: true });
@@ -179,11 +200,11 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
       brandSlot: { enabled: true, anchor: "top-right", ...fixture.brandSlot, assetFit: "contain" }
     },
     brandPolicy: { defaultEnabled: true, userOverrideAllowed: true },
-    inputHandling: {
-      allowSameAspectRatioResize: true,
+    inputHandling: fixture.inputHandling ?? {
+      preserveNativeOutput: true,
       ratioTolerance: 0.002,
-      withinToleranceResizeMode: "scale-to-canvas",
-      outputCanvasIsAuthoritative: true,
+      outputCanvasRole: "design-coordinate-system",
+      allowPostGenerationResize: false,
       allowCrop: false,
       allowPadding: false,
       allowRotation: false,
@@ -208,7 +229,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
   });
 
   const scores = Object.fromEntries(dimensions.map((dimension) => [dimension, 90]));
-  const imageBytes = png(fixture.canvas.width, fixture.canvas.height);
+  const imageBytes = png(generatedCanvas.width, generatedCanvas.height);
   const images = ["concept", "process", "checklist"].map((imageId) => {
     writeFileSync(resolve(root, `prompts/${imageId}.md`), `# ${imageId}\n`);
     writeFileSync(resolve(root, `calibration/${imageId}.png`), imageBytes);
@@ -219,7 +240,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
       total_score: 90,
       scores,
       hard_gates: gates,
-      generation: { backend: "test", model: "test-model", width: fixture.canvas.width, height: fixture.canvas.height }
+      generation: { backend: "test", model: "test-model", width: generatedCanvas.width, height: generatedCanvas.height }
     };
   });
   writeFileSync(resolve(root, "calibration/style-reference.png"), imageBytes);
@@ -267,18 +288,20 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
   return root;
 }
 
-test("existing registry covers five valid production styles and renders deterministically", () => {
+test("existing registry covers all valid production styles and renders deterministically", () => {
   const result = validateInstalledRegistry({ skillRoot: repositoryRoot });
-  assert.equal(result.styles, 5);
+  assert.equal(result.styles, 6);
   const registry = json(resolve(repositoryRoot, "references/style-registry.json"));
   assert.deepEqual(registry.styles.map((style) => style.id), [
     "wechat-doodle",
     "xhs-explainer-notebook",
     "xhs-cream-paper",
     "xhs-orange-card",
-    "zhihu-tech"
+    "zhihu-tech",
+    "toutiao-luminous-tech"
   ]);
-  assert.deepEqual(registry.platforms.map((platform) => platform.id), ["wechat", "xhs", "zhihu"]);
+  assert.deepEqual(registry.platforms.map((platform) => platform.id), ["wechat", "xhs", "zhihu", "toutiao"]);
+  assert.equal(registry.platforms.find((platform) => platform.id === "toutiao").defaultStyleId, "toutiao-luminous-tech");
   assert.equal(renderStyleIndex(registry), renderStyleIndex(structuredClone(registry)));
 });
 
@@ -289,6 +312,24 @@ test("valid approved bundle passes", (t) => {
   assert.equal(result.candidate.style.id, "xhs-test-template");
 });
 
+test("valid XHS bundle preserves native 1086x1448 calibration output", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t, "xhs-native-template", {
+    outputCanvas: { width: 1086, height: 1448 }
+  });
+  const result = validateStyleBundle({ bundleDir, skillRoot });
+  assert.equal(result.spec.inputHandling.preserveNativeOutput, true);
+});
+
+test("calibration generation metadata must match the native PNG", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t, "xhs-native-template", {
+    outputCanvas: { width: 1086, height: 1448 }
+  });
+  mutateJson(resolve(bundleDir, "qa.json"), (qa) => { qa.calibration_images[0].generation.width = 1080; });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /generation dimensions must match the actual PNG/);
+});
+
 test("valid approved Weibo bundle passes before Weibo is registered", (t) => {
   const skillRoot = createSkillRoot(t);
   const bundleDir = createBundle(t, "weibo-test-template", { platform: "weibo" });
@@ -296,6 +337,32 @@ test("valid approved Weibo bundle passes before Weibo is registered", (t) => {
   assert.equal(result.candidate.style.platform, "weibo");
   assert.equal(result.spec.platform, "weibo");
   assert.equal(json(resolve(skillRoot, "references/style-registry.json")).platforms.some((platform) => platform.id === "weibo"), false);
+});
+
+test("valid approved Toutiao bundle preserves native 1672x941 output", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t, "toutiao-test-template", { platform: "toutiao" });
+  const result = validateStyleBundle({ bundleDir, skillRoot });
+  assert.equal(result.candidate.style.platform, "toutiao");
+  assert.equal(result.spec.inputHandling.preserveNativeOutput, true);
+});
+
+test("Toutiao bundle rejects output below the 900px short-edge floor", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t, "toutiao-test-template", {
+    platform: "toutiao",
+    outputCanvas: { width: 1598, height: 899 }
+  });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /short edge/i);
+});
+
+test("Toutiao bundle rejects output outside the 16:9 tolerance", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t, "toutiao-test-template", {
+    platform: "toutiao",
+    outputCanvas: { width: 1672, height: 900 }
+  });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /aspect ratio/i);
 });
 
 test("candidate makeDefault must be boolean when present", (t) => {
@@ -538,8 +605,42 @@ test("first Weibo install atomically registers the platform and new default", (t
     canvas: { width: 1600, height: 900, ratio: "16:9", orientation: "horizontal" },
     routingPhrases: ["微博", "微博配图", "微博信息流配图", "微博横版信息图"]
   });
-  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 6);
+  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 7);
   assert.match(readFileSync(resolve(skillRoot, "references/style-index.md"), "utf8"), /Use Weibo when the user says:/);
+});
+
+test("first Toutiao install registers a flexible 16:9 platform default", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const registryPath = resolve(skillRoot, "references/style-registry.json");
+  mutateJson(registryPath, (registry) => {
+    registry.platforms = registry.platforms.filter((platform) => platform.id !== "toutiao");
+    registry.styles = registry.styles.filter((style) => style.platform !== "toutiao");
+  });
+  writeFileSync(
+    resolve(skillRoot, "references/style-index.md"),
+    renderStyleIndex(json(registryPath))
+  );
+  const bundleDir = createBundle(t, "toutiao-test-template", { platform: "toutiao" });
+  const result = installStyleBundle({ bundleDir, skillRoot });
+  const platform = json(resolve(skillRoot, "references/style-registry.json")).platforms.find((entry) => entry.id === "toutiao");
+
+  assert.equal(result.defaultStyleId, "toutiao-test-template");
+  assert.deepEqual(platform, {
+    id: "toutiao",
+    specPlatform: "toutiao",
+    displayName: "Toutiao",
+    defaultStyleId: "toutiao-test-template",
+    canvas: {
+      width: 1600,
+      height: 900,
+      ratio: "16:9",
+      orientation: "horizontal",
+      sizing: "flexible",
+      minShortEdge: 900
+    },
+    routingPhrases: ["头条号", "今日头条", "头条配图", "头条号配图"]
+  });
+  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 6);
 });
 
 test("makeDefault true replaces an existing platform default", (t) => {

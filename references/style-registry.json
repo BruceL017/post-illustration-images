@@ -54,6 +54,26 @@
         "回答配图",
         "专栏配图"
       ]
+    },
+    {
+      "id": "toutiao",
+      "specPlatform": "toutiao",
+      "displayName": "Toutiao",
+      "defaultStyleId": "toutiao-luminous-tech",
+      "canvas": {
+        "width": 1600,
+        "height": 900,
+        "ratio": "16:9",
+        "orientation": "horizontal",
+        "sizing": "flexible",
+        "minShortEdge": 900
+      },
+      "routingPhrases": [
+        "头条号",
+        "今日头条",
+        "头条配图",
+        "头条号配图"
+      ]
     }
   ],
   "styles": [
@@ -131,6 +151,23 @@
       "provenanceFile": null,
       "aliases": [],
       "defaultUse": "Fixed 16:9 modern AI/SaaS/developer-tool infographic."
+    },
+    {
+      "id": "toutiao-luminous-tech",
+      "displayName": "头条号明亮科技流程",
+      "platform": "toutiao",
+      "styleFile": "references/styles/toutiao-luminous-tech.md",
+      "specFile": "references/styles/toutiao-luminous-tech.spec.json",
+      "styleReference": "assets/style-references/toutiao-luminous-tech.png",
+      "provenanceFile": "references/styles/toutiao-luminous-tech.provenance.json",
+      "aliases": [
+        "头条号明亮科技",
+        "今日头条科技配图",
+        "高调科技",
+        "柔性3D流程",
+        "luminous tech"
+      ],
+      "defaultUse": "头条号科技概念、产品机制、流程解释与发布前检查配图。"
     }
   ]
 }

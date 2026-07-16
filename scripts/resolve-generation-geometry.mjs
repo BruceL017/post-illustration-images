@@ -82,21 +82,27 @@ function resolveGeometry({ styleSpec, modelProfile, model }) {
   }
   validateRequestSize(requestSize, modelProfile.constraints);
 
-  const finalRatio = canvas.width / canvas.height;
-  const requestRatio = requestSize.width / requestSize.height;
-  if (Math.abs(finalRatio - requestRatio) > Number.EPSILON) {
-    throw new Error(`Generation request ratio does not match Style Spec ${styleSpec.id}`);
+  const inputHandling = styleSpec.inputHandling;
+  if (inputHandling?.preserveNativeOutput !== true) {
+    throw new Error(`Style Spec ${styleSpec.id} must preserve native model output`);
+  }
+  if (inputHandling.outputCanvasRole !== "design-coordinate-system") {
+    throw new Error(`Style Spec ${styleSpec.id} must use its canvas as a design coordinate system`);
+  }
+  if (inputHandling.allowPostGenerationResize !== false) {
+    throw new Error(`Style Spec ${styleSpec.id} must forbid post-generation resize`);
+  }
+  if (!Number.isFinite(inputHandling.ratioTolerance) || inputHandling.ratioTolerance < 0) {
+    throw new Error(`Style Spec ${styleSpec.id} has an invalid ratio tolerance`);
+  }
+  if (inputHandling.minShortEdge !== undefined && (!Number.isInteger(inputHandling.minShortEdge) || inputHandling.minShortEdge <= 0)) {
+    throw new Error(`Style Spec ${styleSpec.id} has an invalid minimum short edge`);
   }
 
-  const inputHandling = styleSpec.inputHandling;
-  if (inputHandling?.allowSameAspectRatioResize !== true) {
-    throw new Error(`Style Spec ${styleSpec.id} must allow normalization within ratio tolerance`);
-  }
-  if (inputHandling.outputCanvasIsAuthoritative !== true) {
-    throw new Error(`Style Spec ${styleSpec.id} must mark its output canvas authoritative`);
-  }
-  if (inputHandling.withinToleranceResizeMode !== "scale-to-canvas") {
-    throw new Error(`Style Spec ${styleSpec.id} must use scale-to-canvas within ratio tolerance`);
+  const designRatio = canvas.width / canvas.height;
+  const requestRatio = requestSize.width / requestSize.height;
+  if (Math.abs(designRatio - requestRatio) > inputHandling.ratioTolerance) {
+    throw new Error(`Generation request ratio does not match Style Spec ${styleSpec.id}`);
   }
   if (
     inputHandling.allowCrop !== false ||
@@ -119,11 +125,14 @@ function resolveGeometry({ styleSpec, modelProfile, model }) {
     requested_width: requestSize.width,
     requested_height: requestSize.height,
     target_aspect_ratio: canvas.ratio,
-    final_dimensions: `${canvas.width}x${canvas.height}`,
-    final_width: canvas.width,
-    final_height: canvas.height,
-    ratio_tolerance: inputHandling.ratioTolerance ?? 0.001,
-    normalization_policy: "scale-to-canvas-within-tolerance"
+    design_dimensions: `${canvas.width}x${canvas.height}`,
+    design_width: canvas.width,
+    design_height: canvas.height,
+    delivery_dimensions: "source",
+    ratio_tolerance: inputHandling.ratioTolerance,
+    minimum_short_edge: inputHandling.minShortEdge ?? null,
+    native_output_policy: "preserve",
+    post_generation_resize: "forbidden"
   };
 }
 

@@ -95,10 +95,10 @@
     "userOverrideAllowed": true
   },
   "inputHandling": {
-    "allowSameAspectRatioResize": true,
+    "preserveNativeOutput": true,
     "ratioTolerance": 0.002,
-    "withinToleranceResizeMode": "scale-to-canvas",
-    "outputCanvasIsAuthoritative": true,
+    "outputCanvasRole": "design-coordinate-system",
+    "allowPostGenerationResize": false,
     "allowCrop": false,
     "allowPadding": false,
     "allowRotation": false,

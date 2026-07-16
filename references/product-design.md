@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`post-illustration-images` turns Chinese post content into stable AI-generated illustration assets for WeChat official account articles, Xiaohongshu notes, Zhihu posts, and Weibo feed posts.
+`post-illustration-images` turns Chinese post content into stable AI-generated illustration assets for WeChat official account articles, Xiaohongshu notes, Zhihu posts, Weibo feed posts, and Toutiao posts.
 
 The product goal is not to store one magical prompt. The goal is to productize a repeatable image workflow:
 
@@ -57,7 +57,7 @@ intake
    - The selected Style Spec controls brand placement and size.
    - Every production Style Spec defines an enabled top-right brand slot and matching reserved area.
    - Enablement resolves from an explicit user override, then `brandPolicy.defaultEnabled`, then legacy default `true`.
-   - Missing overlay capability blocks branded delivery; disabling branding skips the logo but not deterministic final sizing.
+   - Missing overlay capability blocks only branded delivery; disabling branding delivers the accepted model raster directly.
    - Model generation must not draw brand logos.
 
 7. Generation backend resolution is explicit and preflighted.
@@ -68,13 +68,13 @@ intake
    - Missing shell variables do not prove that application-managed credentials are absent.
    - Child processes do not inherit parent tools, credentials, endpoints, or image capability by assumption.
    - `references/generation-backends.md` owns backend resolution, secret safety, dynamic model checks, first-image canary behavior, output geometry, retry separation, and failure codes.
-   - `references/gpt-image-2-geometry.spec.json` maps supported Style Spec ratios to legal request dimensions; request size and final canvas are separate contracts.
+   - `references/gpt-image-2-geometry.spec.json` maps supported Style Spec ratios to legal request dimensions; request size, design coordinates, and native delivery pixels are separate contracts.
    - `scripts/resolve-generation-geometry.mjs` validates that mapping before generation, so built-in styles never require a user size choice.
    - Other image skills are not part of the default route.
    - HTML/CSS rendering is not the main path for this skill.
-   - `scripts/apply-brand-overlay.mjs` scales accepted sources within ratio tolerance, validates final dimensions, and applies the brand unless `--skip-brand true` is selected.
+   - `scripts/apply-brand-overlay.mjs` maps the brand slot onto an accepted source and preserves that source's width and height; it runs only when branding is enabled.
    - The finalizer loads vendored `@resvg/resvg-wasm@2.6.2` in-process under Node.js 22+; it needs no runtime `npm install`, native SVG renderer, network access, or API key.
-   - If Node.js 22+ or the vendored renderer is unavailable, use the brand-overlay blocker when branding is enabled and the output-normalization blocker when it is disabled.
+   - If Node.js 22+ or the vendored renderer is unavailable, use the brand-overlay blocker only when branding is enabled.
 
 ## Skill Folder Structure
 
@@ -149,24 +149,24 @@ post-illustration-output/<content-slug>/
       01-topic.png
       02-topic.png
     branded/
-      01-topic.png
-      02-topic.png
+      01-topic.<png-or-required-export-ext>
+      02-topic.<png-or-required-export-ext>
   manifest.md
 ```
 
-When Brand Plugin resolves disabled, retain backend PNGs under `images/source/` and write finalized PNGs directly under `images/`. Otherwise the branded PNG is the production deliverable and the unbranded PNG is retained as its source.
+When Brand Plugin resolves disabled, save the accepted backend raster under `images/` with its native or required export extension. Otherwise the branded artifact is the production deliverable and the same-dimension unbranded PNG is retained as its source.
 
 `manifest.md` records:
 
 - File
-- Platform
+- Platform and known publishing path, or `null`
 - Style Spec
 - Machine Spec path
 - Verified generation backend kind, adapter, endpoint source, API dialect when relevant, model preference/source, resolved model, and resolution note
 - Verified model geometry profile, requested dimensions, and target aspect ratio
 - Credential/model preflight, cleanup-plan, and final cleanup status without secret values
 - Brand Plugin default, user override, policy source, and resolved enabled/disabled state
-- Flat bundle-level `brand_overlay_renderer: resvg-wasm@2.6.2`
+- Flat bundle-level `brand_overlay_renderer`: `resvg-wasm@2.6.2` when used, otherwise `null`
 - Shot list path
 - Prompt path
 - Sequence or placement
@@ -177,7 +177,7 @@ When Brand Plugin resolves disabled, retain backend PNGs under `images/source/` 
 - Style Spec QA status
 - Brand Plugin QA status, if enabled
 - Brand overlay status: `applied`, `disabled-by-user`, or `disabled-by-style-default`
-- Generation and geometry attempts, requested/source/final dimensions, and normalization action
+- Generation and geometry attempts, requested/source/delivery dimensions, source/delivery formats and bytes, optional hard-limit exporter, native-output status, and ordered post-generation actions
 
 ## Extension Rules
 
@@ -219,9 +219,9 @@ The skill is working when a fresh agent can:
 - Save `shot-list.md` and `prompts/*.md` before generation.
 - Generate and inspect image 1 as a canary before continuing the suite.
 - Resolve legal `gpt-image-2` request dimensions automatically for every built-in style.
-- Record requested, source, and final dimensions; normalize sources within ratio tolerance automatically and reject sources outside tolerance without crop, padding, rotation, or stretch.
-- Finalize exact output dimensions with branding enabled or disabled.
-- Finalize locally with vendored `resvg-wasm@2.6.2` under Node.js 22+ and no runtime package installation or API key.
+- Record requested, source, and delivery dimensions; preserve sources within ratio tolerance and reject sources outside tolerance without resize, crop, padding, rotation, stretch, or upscale.
+- Keep delivery dimensions equal to source dimensions, including after brand overlay.
+- Apply branding locally with vendored `resvg-wasm@2.6.2` under Node.js 22+ and no runtime package installation or API key.
 - Keep the image set visually consistent.
 - Keep model-drawn brand and page-number badges out of generated images.
 - Resolve Brand Plugin state from the user override and selected Style Spec, then apply the overlay only when enabled and only through the selected top-right slot.

@@ -18,7 +18,7 @@ English | [中文](./README.zh.md)
 
 # Post Illustration Images
 
-Generates a full illustration set for a WeChat / Xiaohongshu / Zhihu / Weibo post in one pass — reading the body, storyboarding, shot-by-shot generation, and QA all handled end-to-end.
+Generates a full illustration set for a WeChat / Xiaohongshu / Zhihu / Toutiao post, or a Weibo post after a Weibo style is registered — reading the body, storyboarding, shot-by-shot generation, and QA end-to-end.
 
 ## When to use it
 
@@ -52,9 +52,9 @@ Pure photography / portrait retouching / product renders / photorealistic brand 
 
 - **Output location**: `post-illustration-output/<article-slug>/` under the project root — never written inside the skill directory
 - **Completed production run**: `shot-list.md` (storyboard) + `prompts/*.md` (one prompt file per shot) + `manifest.md` (backend, model, geometry, and QA metadata in YAML)
-- **Image paths**: `images/unbranded/*.png` (originals before logo overlay) + `images/branded/*.png` (logo applied); with branding explicitly disabled, raw sources use `images/source/*.png` and finalized images use `images/*.png`
-- **Finalization side effect**: runs `scripts/apply-brand-overlay.mjs` to normalize the final canvas and optionally apply the logo through bundled `resvg-wasm@2.6.2`; `--skip-brand true` keeps normalization but omits the logo
-- **Generation geometry**: built-in styles map automatically to legal `gpt-image-2` request dimensions; responses within ratio tolerance are normalized without asking for size confirmation
+- **Image paths**: `images/unbranded/*.png` (PNG sources before logo overlay) + `images/branded/*` (same-dimension branded delivery); with branding disabled, the accepted model raster keeps its native extension under `images/`
+- **Branding side effect**: only when branding is enabled, runs `scripts/apply-brand-overlay.mjs` through bundled `resvg-wasm@2.6.2`; the output keeps the source width and height
+- **Generation geometry**: built-in styles map automatically to legal `gpt-image-2` request dimensions; responses within ratio tolerance keep their native pixels without asking for size confirmation
 - **QA loop**: a failing image is retried up to 2 times; still failing, it either falls back to a content-anchor tweak or, with your consent, ships with a `residual_risk` note
 - **Never does**: ask the image model to draw the logo / TF / watermark / page-number frame; generate the whole carousel in one shot; copy the visual semantics of a `style_reference`
 
@@ -62,7 +62,7 @@ Pure photography / portrait retouching / product renders / photorealistic brand 
 
 **Prerequisites**:
 
-A verified runtime-native image tool or already-configured API image backend is available; the target platform is WeChat / Xiaohongshu / Zhihu / Weibo; Node.js 22+ is available for deterministic finalization. The vendored finalizer needs no runtime `npm install`, native SVG package, or API key. A declared configured API backend is preflighted separately, without public key provisioning or official-endpoint assumptions.
+A verified runtime-native image tool or already-configured API image backend is available; the target platform is WeChat / Xiaohongshu / Zhihu / Toutiao, or Weibo with a registered style. Node.js 22+ is required only when branding is enabled. The vendored overlay needs no runtime `npm install`, native SVG package, or API key. A declared configured API backend is preflighted separately, without public key provisioning or official-endpoint assumptions.
 
 **Not accepted**:
 

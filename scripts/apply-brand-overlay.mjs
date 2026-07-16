@@ -44,8 +44,7 @@ const valueOptions = new Set([
   "input-dir",
   "output-dir",
   "style-spec",
-  "brand-svg",
-  "skip-brand"
+  "brand-svg"
 ]);
 const booleanOptions = new Set(["self-test"]);
 
@@ -61,7 +60,6 @@ function usage() {
 Options:
   --style-spec <path>   Defaults to ${defaultStyleSpec}
   --brand-svg <path>    Defaults to ${defaultBrandSvg}
-  --skip-brand <bool>   Use true to normalize without reading or applying a brand asset
 `);
 }
 
@@ -124,13 +122,6 @@ function resolveOutputPath(pathValue) {
 
 function defaultPath(relativePath) {
   return resolve(skillRoot, relativePath);
-}
-
-function parseBoolean(value, name) {
-  if (value === undefined) return false;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw new Error(`${name} must be true or false`);
 }
 
 function sha256(buffer) {
@@ -386,13 +377,24 @@ function aspectRatioMatches(size, canvas, tolerance) {
   return Math.abs(size.width / size.height - canvas.width / canvas.height) <= tolerance;
 }
 
-function buildWrapperSvg({ inputPng, spec, brand }) {
+function scaleRect(rect, canvas, sourceSize) {
+  const scaleX = sourceSize.width / canvas.width;
+  const scaleY = sourceSize.height / canvas.height;
+  return {
+    x: rect.x * scaleX,
+    y: rect.y * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY
+  };
+}
+
+function buildWrapperSvg({ inputPng, sourceSize, spec, brand }) {
   const { canvas } = spec;
   const imageHref = `data:image/png;base64,${inputPng.toString("base64")}`;
   let brandElement = "";
 
   if (brand) {
-    const slot = spec.fixedComponents.brandSlot;
+    const slot = scaleRect(spec.fixedComponents.brandSlot, canvas, sourceSize);
     brandElement = `
   <svg
     x="${slot.x}"
@@ -408,16 +410,16 @@ function buildWrapperSvg({ inputPng, spec, brand }) {
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg"
-  width="${canvas.width}"
-  height="${canvas.height}"
-  viewBox="0 0 ${canvas.width} ${canvas.height}">
+  width="${sourceSize.width}"
+  height="${sourceSize.height}"
+  viewBox="0 0 ${sourceSize.width} ${sourceSize.height}">
   <image
     href="${imageHref}"
     x="0"
     y="0"
-    width="${canvas.width}"
-    height="${canvas.height}"
-    preserveAspectRatio="none"
+    width="${sourceSize.width}"
+    height="${sourceSize.height}"
+    preserveAspectRatio="xMidYMid meet"
   />${brandElement}
 </svg>`;
 }
@@ -486,36 +488,40 @@ async function writeOutputAtomically(output, buffer) {
 async function renderOne({ input, output, spec, specPath, brand, capturePixels = false }) {
   await ensureDistinctFiles(input, output);
 
-  const canvas = brand
-    ? validateBrandGeometry(spec, specPath).canvas
-    : validateCanvasGeometry(spec, specPath);
+  const { canvas } = validateBrandGeometry(spec, specPath);
   const { buffer: inputPng, size } = await readInputPng(input);
 
-  if (size.width !== canvas.width || size.height !== canvas.height) {
-    const handling = spec.inputHandling;
-    const tolerance = handling?.ratioTolerance;
-    const canResize =
-      handling?.allowSameAspectRatioResize === true &&
-      handling?.withinToleranceResizeMode === "scale-to-canvas" &&
-      handling?.outputCanvasIsAuthoritative === true &&
-      Number.isFinite(tolerance) &&
-      tolerance >= 0;
-
-    if (!canResize || !aspectRatioMatches(size, canvas, tolerance)) {
-      throw new Error(
-        `${basename(input)} is ${size.width}x${size.height}, expected ${canvas.width}x${canvas.height} from Style Spec ${spec.id ?? specPath}`
-      );
-    }
+  const handling = spec.inputHandling;
+  const tolerance = handling?.ratioTolerance;
+  const validMinimumShortEdge = handling?.minShortEdge === undefined ||
+    (Number.isInteger(handling.minShortEdge) && handling.minShortEdge > 0);
+  const preservesNativeOutput =
+    handling?.preserveNativeOutput === true &&
+    handling?.outputCanvasRole === "design-coordinate-system" &&
+    handling?.allowPostGenerationResize === false &&
+    Number.isFinite(tolerance) &&
+    tolerance >= 0 &&
+    validMinimumShortEdge;
+  if (!preservesNativeOutput) {
+    throw new Error(`Style Spec ${spec.id ?? specPath} has incompatible native-output handling`);
+  }
+  if (!aspectRatioMatches(size, canvas, tolerance)) {
+    throw new Error(
+      `${basename(input)} is ${size.width}x${size.height}; its ratio is outside tolerance for ${canvas.ratio ?? `${canvas.width}:${canvas.height}`}`
+    );
+  }
+  if (handling.minShortEdge && Math.min(size.width, size.height) < handling.minShortEdge) {
+    throw new Error(`${basename(input)} short edge ${Math.min(size.width, size.height)}px must be at least ${handling.minShortEdge}px`);
   }
 
   const Renderer = await ensureResvg();
-  const wrapperSvg = buildWrapperSvg({ inputPng, spec, brand });
+  const wrapperSvg = buildWrapperSvg({ inputPng, sourceSize: size, spec, brand });
   const { png, pixels } = renderSvg(Renderer, wrapperSvg, capturePixels);
   const outputSize = parsePngSize(png, output);
 
-  if (outputSize.width !== canvas.width || outputSize.height !== canvas.height) {
+  if (outputSize.width !== size.width || outputSize.height !== size.height) {
     throw new Error(
-      `Renderer returned ${outputSize.width}x${outputSize.height}; expected ${canvas.width}x${canvas.height}`
+      `Renderer returned ${outputSize.width}x${outputSize.height}; expected native source size ${size.width}x${size.height}`
     );
   }
 
@@ -574,7 +580,13 @@ async function runSelfTest(brandSvgPath) {
         assetFit: "contain"
       }
     },
-    generationConstraints: { keepBrandReservedAreaClear: true }
+    generationConstraints: { keepBrandReservedAreaClear: true },
+    inputHandling: {
+      preserveNativeOutput: true,
+      ratioTolerance: 0.002,
+      outputCanvasRole: "design-coordinate-system",
+      allowPostGenerationResize: false
+    }
   };
 
   try {
@@ -641,8 +653,8 @@ async function main() {
     : defaultPath(defaultBrandSvg);
 
   if (args["self-test"]) {
-    if (args.input || args.output || args["input-dir"] || args["output-dir"] || args["skip-brand"]) {
-      throw new Error("--self-test cannot be combined with input, output, or --skip-brand options");
+    if (args.input || args.output || args["input-dir"] || args["output-dir"]) {
+      throw new Error("--self-test cannot be combined with input or output options");
     }
     await runSelfTest(brandSvgPath);
     return;
@@ -659,11 +671,8 @@ async function main() {
     return;
   }
 
-  const skipBrand = parseBoolean(args["skip-brand"], "--skip-brand");
   const spec = await readStyleSpec(styleSpecPath);
-  const brand = skipBrand
-    ? null
-    : parseBrandSvg(await readFile(brandSvgPath, "utf8"), brandSvgPath);
+  const brand = parseBrandSvg(await readFile(brandSvgPath, "utf8"), brandSvgPath);
 
   if (hasFileMode) {
     if (!args.input || !args.output) {

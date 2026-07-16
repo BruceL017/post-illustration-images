@@ -22,6 +22,10 @@ const platformRegistrations = Object.freeze({
   weibo: Object.freeze({
     displayName: "Weibo",
     routingPhrases: Object.freeze(["微博", "微博配图", "微博信息流配图", "微博横版信息图"])
+  }),
+  toutiao: Object.freeze({
+    displayName: "Toutiao",
+    routingPhrases: Object.freeze(["头条号", "今日头条", "头条配图", "头条号配图"])
   })
 });
 
@@ -112,7 +116,9 @@ function installStyleBundleLocked({ bundleDir, skillRoot, registryPath }) {
             width: baseline.width,
             height: baseline.height,
             ratio: baseline.ratio,
-            orientation: baseline.orientation
+            orientation: baseline.orientation,
+            ...(baseline.sizing ? { sizing: baseline.sizing } : {}),
+            ...(baseline.minShortEdge ? { minShortEdge: baseline.minShortEdge } : {})
           },
           routingPhrases: [...registration.routingPhrases]
         }

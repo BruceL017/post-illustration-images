@@ -29,7 +29,8 @@ const styleSpecPaths = [
   "references/styles/xhs-style-cream-paper.spec.json",
   "references/styles/xhs-style-explainer-notebook.spec.json",
   "references/styles/xhs-style-orange-card.spec.json",
-  "references/styles/zhihu-style-title.spec.json"
+  "references/styles/zhihu-style-title.spec.json",
+  "references/styles/toutiao-luminous-tech.spec.json"
 ].map((path) => resolve(skillRoot, path));
 
 function crc32(buffer) {
@@ -159,6 +160,45 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function testSpec(id, width = 128, height = 96) {
+  return {
+    id,
+    canvas: { width, height, ratio: "4:3", orientation: "horizontal" },
+    layout: {
+      brandReservedArea: { x: width / 2, y: 8, width: width / 2 - 4, height: 32 }
+    },
+    fixedComponents: {
+      brandSlot: {
+        enabled: true,
+        anchor: "top-right",
+        x: width / 2 + 4,
+        y: 12,
+        width: width / 2 - 12,
+        height: 20,
+        assetFit: "contain"
+      }
+    },
+    generationConstraints: { keepBrandReservedAreaClear: true },
+    inputHandling: {
+      preserveNativeOutput: true,
+      ratioTolerance: 0.002,
+      outputCanvasRole: "design-coordinate-system",
+      allowPostGenerationResize: false
+    }
+  };
+}
+
+function scaleRect(rect, canvas, size) {
+  const scaleX = size.width / canvas.width;
+  const scaleY = size.height / canvas.height;
+  return {
+    x: rect.x * scaleX,
+    y: rect.y * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY
+  };
+}
+
 function createTempDir(t, prefix) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -200,15 +240,6 @@ function expectFailure(args, directory, messagePattern) {
   assert.notEqual(result.status, 0, `overlay unexpectedly succeeded\nstdout:\n${result.stdout}`);
   assert.match(`${result.stdout}\n${result.stderr}`, messagePattern);
   return result;
-}
-
-function assertSolid(image, rgba, label) {
-  for (let offset = 0; offset < image.rgba.length; offset += 4) {
-    assert.equal(image.rgba[offset], rgba[0], `${label} changed red at pixel ${offset / 4}`);
-    assert.equal(image.rgba[offset + 1], rgba[1], `${label} changed green at pixel ${offset / 4}`);
-    assert.equal(image.rgba[offset + 2], rgba[2], `${label} changed blue at pixel ${offset / 4}`);
-    assert.equal(image.rgba[offset + 3], rgba[3], `${label} changed alpha at pixel ${offset / 4}`);
-  }
 }
 
 function assertVisibleLogo(image, slot, label) {
@@ -279,7 +310,7 @@ test("self-test loads the vendored renderer without external commands", (t) => {
   assert.match(result.stdout, /brand overlay self-test passed/i);
 });
 
-test("renders a visible Logo on exact-size input for all five real Style Specs", async (t) => {
+test("renders a visible Logo on exact-size input for all real Style Specs", async (t) => {
   for (const specPath of styleSpecPaths) {
     const spec = readJson(specPath);
     await t.test(spec.id, (subtest) => {
@@ -305,59 +336,79 @@ test("renders a visible Logo on exact-size input for all five real Style Specs",
   }
 });
 
-test("--skip-brand true normalizes without reading or drawing a Logo", (t) => {
-  const specPath = styleSpecPaths[2];
-  const spec = readJson(specPath);
-  const directory = createTempDir(t, "brand-overlay-skip-");
+test("preserves representative model-native dimensions while applying the Logo", async (t) => {
+  const scenarios = [
+    { specPath: styleSpecPaths[0], width: 1448, height: 1086 },
+    { specPath: styleSpecPaths[1], width: 1086, height: 1448 },
+    { specPath: styleSpecPaths[4], width: 2048, height: 1152 },
+    { specPath: styleSpecPaths[4], width: 1672, height: 941 }
+  ];
+
+  for (const scenario of scenarios) {
+    const spec = readJson(scenario.specPath);
+    await t.test(`${spec.id}-${scenario.width}x${scenario.height}`, (subtest) => {
+      const directory = createTempDir(subtest, `brand-overlay-native-${spec.id}-`);
+      const input = join(directory, "input.png");
+      const output = join(directory, "output.png");
+      const inputBytes = solidPng(scenario.width, scenario.height);
+      writeFileSync(input, inputBytes);
+
+      expectSuccess([
+        "--style-spec", scenario.specPath,
+        "--input", input,
+        "--output", output
+      ], directory);
+
+      assert.deepEqual(readFileSync(input), inputBytes, `${spec.id} modified its native source`);
+      const rendered = decodePng(readFileSync(output), output);
+      assert.equal(rendered.width, scenario.width);
+      assert.equal(rendered.height, scenario.height);
+      assertVisibleLogo(
+        rendered,
+        scaleRect(spec.fixedComponents.brandSlot, spec.canvas, scenario),
+        spec.id
+      );
+    });
+  }
+});
+
+test("rejects a source ratio outside tolerance without replacing output", (t) => {
+  const directory = createTempDir(t, "brand-overlay-wrong-ratio-");
   const input = join(directory, "input.png");
   const output = join(directory, "output.png");
-  const inputBytes = solidPng(spec.canvas.width, spec.canvas.height);
-  writeFileSync(input, inputBytes);
+  const existingOutput = Buffer.from("existing output");
+  writeFileSync(input, solidPng(1080, 1400));
+  writeFileSync(output, existingOutput);
 
-  expectSuccess([
-    "--style-spec", specPath,
-    "--brand-svg", join(directory, "missing-logo.svg"),
-    "--skip-brand", "true",
+  expectFailure([
+    "--style-spec", styleSpecPaths[1],
     "--input", input,
     "--output", output
-  ], directory);
+  ], directory, /ratio is outside tolerance/i);
 
-  assert.deepEqual(readFileSync(input), inputBytes, "brand-off rendering modified its input");
-  const rendered = decodePng(readFileSync(output), output);
-  assert.equal(rendered.width, spec.canvas.width);
-  assert.equal(rendered.height, spec.canvas.height);
-  assertSolid(rendered, background, "brand-off output");
+  assert.deepEqual(readFileSync(output), existingOutput);
   assertNoTemporaryOutput(directory, output);
 });
 
-test("normalizes a within-tolerance input using the current resize schema", (t) => {
-  const specPath = styleSpecPaths[1];
-  const spec = readJson(specPath);
-  assert.equal(spec.inputHandling.allowSameAspectRatioResize, true);
-  assert.equal(spec.inputHandling.withinToleranceResizeMode, "scale-to-canvas");
-
-  const directory = createTempDir(t, "brand-overlay-resize-");
+test("rejects native output below a configured short-edge floor", (t) => {
+  const directory = createTempDir(t, "brand-overlay-short-edge-");
   const input = join(directory, "input.png");
   const output = join(directory, "output.png");
-  const inputWidth = spec.canvas.width - 1;
-  const inputBytes = solidPng(inputWidth, spec.canvas.height);
-  const ratioDifference = Math.abs(inputWidth / spec.canvas.height - spec.canvas.width / spec.canvas.height);
-  assert.ok(ratioDifference <= spec.inputHandling.ratioTolerance);
+  const specPath = join(directory, "short-edge.spec.json");
+  const spec = testSpec("short-edge-test", 160, 90);
+  spec.inputHandling.minShortEdge = 100;
+  const inputBytes = solidPng(160, 90);
+  writeFileSync(specPath, JSON.stringify(spec));
   writeFileSync(input, inputBytes);
 
-  expectSuccess([
+  expectFailure([
     "--style-spec", specPath,
-    "--brand-svg", join(directory, "missing-logo.svg"),
-    "--skip-brand", "true",
     "--input", input,
     "--output", output
-  ], directory);
+  ], directory, /short edge 90px.*at least 100px/i);
 
-  assert.deepEqual(readFileSync(input), inputBytes, "resize normalization modified its input");
-  const rendered = decodePng(readFileSync(output), output);
-  assert.equal(rendered.width, spec.canvas.width);
-  assert.equal(rendered.height, spec.canvas.height);
-  assertSolid(rendered, background, "within-tolerance output");
+  assert.deepEqual(readFileSync(input), inputBytes);
+  assertNoTemporaryOutput(directory, output);
 });
 
 test("batch mode processes PNG files without an external find command", (t) => {
@@ -366,20 +417,20 @@ test("batch mode processes PNG files without an external find command", (t) => {
   const outputDir = join(directory, "output");
   const specPath = join(directory, "batch.spec.json");
   mkdirSync(inputDir);
-  writeFileSync(specPath, JSON.stringify({ id: "batch-test", canvas: { width: 32, height: 24 } }));
-  writeFileSync(join(inputDir, "01.png"), solidPng(32, 24));
-  writeFileSync(join(inputDir, "02.PNG"), solidPng(32, 24));
+  const spec = testSpec("batch-test");
+  writeFileSync(specPath, JSON.stringify(spec));
+  writeFileSync(join(inputDir, "01.png"), solidPng(spec.canvas.width, spec.canvas.height));
+  writeFileSync(join(inputDir, "02.PNG"), solidPng(spec.canvas.width, spec.canvas.height));
   writeFileSync(join(inputDir, "ignore.txt"), "not an image");
 
   expectSuccess([
     "--style-spec", specPath,
-    "--skip-brand", "true",
     "--input-dir", inputDir,
     "--output-dir", outputDir
   ], directory);
 
   assert.deepEqual(readdirSync(outputDir).sort(), ["01.png", "02.PNG"]);
-  assertSolid(decodePng(readFileSync(join(outputDir, "01.png")), "batch output"), background, "batch output");
+  assertVisibleLogo(decodePng(readFileSync(join(outputDir, "01.png")), "batch output"), spec.fixedComponents.brandSlot, "batch output");
 });
 
 test("successfully replaces an existing regular output", (t) => {
@@ -387,20 +438,20 @@ test("successfully replaces an existing regular output", (t) => {
   const input = join(directory, "input.png");
   const output = join(directory, "output.png");
   const specPath = join(directory, "replace.spec.json");
-  const inputBytes = solidPng(32, 24);
-  writeFileSync(specPath, JSON.stringify({ id: "replace-test", canvas: { width: 32, height: 24 } }));
+  const spec = testSpec("replace-test");
+  const inputBytes = solidPng(spec.canvas.width, spec.canvas.height);
+  writeFileSync(specPath, JSON.stringify(spec));
   writeFileSync(input, inputBytes);
   writeFileSync(output, "previous output");
 
   expectSuccess([
     "--style-spec", specPath,
-    "--skip-brand", "true",
     "--input", input,
     "--output", output
   ], directory);
 
   assert.deepEqual(readFileSync(input), inputBytes, "replacement modified its source");
-  assertSolid(decodePng(readFileSync(output), "replacement output"), background, "replacement output");
+  assertVisibleLogo(decodePng(readFileSync(output), "replacement output"), spec.fixedComponents.brandSlot, "replacement output");
   assertNoTemporaryOutput(directory, output);
 });
 
@@ -415,8 +466,6 @@ test("rejects malformed PNG input without replacing existing files", (t) => {
 
   expectFailure([
     "--style-spec", styleSpecPaths[2],
-    "--brand-svg", join(directory, "missing-logo.svg"),
-    "--skip-brand", "true",
     "--input", input,
     "--output", output
   ], directory, /PNG/i);
@@ -462,7 +511,6 @@ test("rejects a hard-linked output that aliases the source PNG", (t) => {
 
   expectFailure([
     "--style-spec", styleSpecPaths[2],
-    "--skip-brand", "true",
     "--input", input,
     "--output", output
   ], directory, /different paths|source PNG is preserved/i);
@@ -481,7 +529,6 @@ test("rejects an existing directory as the output path", (t) => {
 
   expectFailure([
     "--style-spec", styleSpecPaths[2],
-    "--skip-brand", "true",
     "--input", input,
     "--output", output
   ], directory, /output path must be a regular file/i);

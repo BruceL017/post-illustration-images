@@ -68,7 +68,7 @@ Quality requirements:
 - No realistic screenshots.
 - No stock-photo feeling.
 - No excessive decoration.
-- Do not let the image model draw a logo, TF mark, Tranfu text, watermark, brand sticker, placeholder frame, or visible brand-slot marker. A real `TF + Tranfu` SVG is overlaid in the top-right after generation by default.
+- Do not let the image model draw a logo, TF mark, Tranfu text, watermark, brand sticker, placeholder frame, or visible brand-slot marker. Overlay the real `TF + Tranfu` SVG only when Brand Plugin resolves enabled.
 ```
 
 ## 中文版提示词
@@ -209,7 +209,7 @@ brand_slot: top-right, x=872, y=64, w=148, h=40
 
 - 所有生产图片默认启用 Brand Plugin；只有用户明确要求无水印、无 logo 或禁用 Tranfu 品牌时才关闭。
 - Brand Plugin 启用时，图像模型保持右上角品牌预留区自然干净；无论是否启用，都不得绘制、标记或模拟品牌槽位。
-- 真实 `TF + Tranfu` SVG 在图像生成后叠加到 `x=872, y=64, w=148, h=40`。
+- Brand Plugin 启用时，真实 `TF + Tranfu` SVG 在图像生成后叠加到 `x=872, y=64, w=148, h=40`。
 - 参考图是否包含水印不影响生产规则；实际品牌状态和位置只以本风格的 Style Spec 为准。
 
 ## 禁用项

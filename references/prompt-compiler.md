@@ -13,7 +13,7 @@ Save each compiled single-image prompt under the output folder's `prompts/` dire
 ## Prompt Assembly Order
 
 1. Platform and purpose.
-2. Selected Style Spec constraints, including final canvas ratio, palette, layout, safe area, fixed components, and negative constraints.
+2. Selected Style Spec constraints, including target ratio, design-coordinate layout, palette, safe area, fixed components, and negative constraints.
 3. Image sequence and one core meaning.
 4. Content expression structure.
 5. Visual metaphor and physical action.
@@ -28,7 +28,7 @@ Save each compiled single-image prompt under the output folder's `prompts/` dire
 Generate one <platform> post illustration for image <n> of a coherent image set.
 
 Use the selected Style Spec exactly:
-<paste or summarize the selected style file's final canvas ratio, fixed palette, layout language, safe areas, fixed component rules, typography, and negative constraints>
+<paste or summarize the selected style file's target ratio, design-coordinate layout, fixed palette, safe areas, fixed component rules, typography, and negative constraints>
 
 Source content anchor:
 <anchor from the article/note/post>
@@ -90,7 +90,7 @@ Use the verified `BackendContext` and `GenerationGeometry` selected by `SKILL.md
 
 Do not call other image-generation skills by default. Do not embed endpoint, credential, provider-setup, or fallback-routing instructions inside image prompts.
 
-Describe the Style Spec's final ratio and layout in the visual prompt. Pass `GenerationGeometry.requested_dimensions` only as the backend size parameter; do not copy it into the prompt or derive it directly from the final canvas. Inspect the actual PNG because the gateway may return a different size or ratio after accepting the request.
+Describe the Style Spec's target ratio and design-coordinate layout in the visual prompt. Pass `GenerationGeometry.requested_dimensions` only as the backend size parameter; do not copy it into the prompt or treat the design canvas as required output pixels. Inspect the actual raster and preserve it when its ratio is within tolerance.
 
 ## Fixed Component Policy
 
@@ -106,7 +106,7 @@ Keep these out unless a selected Style Spec explicitly enables them:
 - Placeholder frames, reserve boxes, guide outlines, or visible markers for fixed component slots.
 - Template-level overlays that must be pixel-stable.
 
-If the model draws any of these by accident, regenerate with stronger negative constraints before applying overlays.
+If the model draws any of these by accident, regenerate with stronger negative constraints; apply overlays afterward only when the resolved Brand Plugin state is enabled.
 
 Do not use Style Reference watermark presence, absence, or position to enable, disable, or place the production brand overlay.
 

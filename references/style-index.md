@@ -8,7 +8,7 @@ Important:
 
 - `references/style-registry.json` is the machine-readable source of truth for registered styles and routing metadata.
 - Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, component slots, and brand defaults.
-- Style Spec canvas dimensions are final delivery geometry. Model request dimensions are resolved separately from the verified generation geometry profile.
+- Style Spec canvas dimensions are design-coordinate geometry for target ratio and layout. Accepted model output pixels are preserved for delivery; request dimensions come from the verified generation geometry profile.
 - Style reference images are QA baselines only. They are never generation inputs and their semantic content must not be copied.
 - Brand resolution is: explicit user choice, then `brandPolicy.defaultEnabled`, then compatibility default `true` for an older spec without `brandPolicy`.
 - When branding resolves disabled, the brand area is not an active reservation, although every production spec retains valid top-right brand geometry.
@@ -20,6 +20,7 @@ Important:
 | `xhs-cream-paper` | Xiaohongshu | `references/styles/xhs-style-cream-paper.md` | `references/styles/xhs-style-cream-paper.spec.json` | `assets/style-references/xhs-cream-paper.png` | spec default, user-overridable | disabled | Warm cream-paper hand-drawn Xiaohongshu infographic base. |
 | `xhs-orange-card` | Xiaohongshu | `references/styles/xhs-style-orange-card.md` | `references/styles/xhs-style-orange-card.spec.json` | `assets/style-references/xhs-orange-card.png` | spec default, user-overridable | disabled | Warm orange torn-paper knowledge-card carousel style. |
 | `zhihu-tech` | Zhihu | `references/styles/zhihu-style-title.md` | `references/styles/zhihu-style-title.spec.json` | `assets/style-references/zhihu-tech.png` | spec default, user-overridable | disabled | Fixed 16:9 modern AI/SaaS/developer-tool infographic. |
+| `toutiao-luminous-tech` | Toutiao | `references/styles/toutiao-luminous-tech.md` | `references/styles/toutiao-luminous-tech.spec.json` | `assets/style-references/toutiao-luminous-tech.png` | spec default, user-overridable | disabled | 头条号科技概念、产品机制、流程解释与发布前检查配图。 |
 
 ## Platform Routing
 
@@ -43,6 +44,13 @@ Use Zhihu when the user says:
 - 回答配图
 - 专栏配图
 
+Use Toutiao when the user says:
+
+- 头条号
+- 今日头条
+- 头条配图
+- 头条号配图
+
 If the platform is not stated and cannot be inferred from the source content, ask which platform to use.
 
 ## Style Selection
@@ -58,6 +66,7 @@ If the platform is not stated and cannot be inferred from the source content, as
 |---|---|
 | 奶油色 / 奶油纸 / 米白色 / 米白纸 / cream paper / cream / off-white paper / 手绘马克笔 / 轻量手账 | `xhs-cream-paper` |
 | 暖橙色 / 暖橙 / 橙色 / 橙色撕纸 / 暖橙撕纸 / orange card / torn paper / Quick Guide / Key Point | `xhs-orange-card` |
+| 头条号明亮科技 / 今日头条科技配图 / 高调科技 / 柔性3D流程 / luminous tech | `toutiao-luminous-tech` |
 
 Do not preselect image count, aspect ratio, palette, safe area, brand geometry, page badges, or other fixed slots before selecting a style.
 
