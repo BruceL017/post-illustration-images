@@ -129,9 +129,9 @@ The Style Spec owns final geometry. `GenerationGeometry` owns the API request. T
 3. If dimensions differ but aspect ratio matches within the Style Spec tolerance, retain the source and scale it to the final canvas as `pass-normalized`. This bounded correction may remove sub-tolerance aspect drift; it is not permission to accept a source outside tolerance.
 4. Reject output outside ratio tolerance. Do not crop, rotate, pad, or stretch it; retry the same canonical request with stronger orientation/ratio wording.
 5. Allow at most three submitted image candidates per image, then stop as `BLOCKER: backend output ratio mismatch` without asking the user to select a size.
-6. Record `requested_dimensions`, `source_dimensions`, `final_dimensions`, normalization action, and structured geometry attempts in `manifest.md`.
-7. When branding is enabled, the deterministic brand overlay also normalizes the canvas.
-8. When branding is disabled, run `scripts/apply-brand-overlay.mjs --skip-brand true` to normalize without reading a brand asset.
+6. Record `requested_dimensions`, `source_dimensions`, `final_dimensions`, normalization action, structured geometry attempts, and flat bundle-level `brand_overlay_renderer: resvg-wasm@2.6.2` in `manifest.md`.
+7. Run `scripts/apply-brand-overlay.mjs` for every accepted source. Use `--skip-brand false` to normalize and apply the real asset when branding is enabled; use `--skip-brand true` to normalize without reading or applying a brand asset when it is disabled.
+8. The finalizer loads vendored `@resvg/resvg-wasm@2.6.2` in-process and requires Node.js 22+. It needs no runtime `npm install`, native SVG renderer, network access, or API key; generation-backend credentials remain a separate concern.
 9. Never claim the requested generation size was honored without inspecting the actual PNG.
 
 ## Retries And Process Cleanup
@@ -158,6 +158,7 @@ The Style Spec owns final geometry. `GenerationGeometry` owns the API request. T
 | Resolved model or ratio has no verified geometry profile | `BLOCKER: backend geometry profile unavailable` |
 | Request returns no current valid raster artifact | `BLOCKER: backend output unavailable` |
 | Source aspect ratio conflicts with the Style Spec | `BLOCKER: backend output ratio mismatch` |
+| Node.js 22+ or the vendored finalizer is unavailable | `BLOCKER: required brand overlay unavailable` when branding is enabled; otherwise `BLOCKER: output normalization unavailable` |
 | Source within ratio tolerance needs normalization but no deterministic normalizer exists | `BLOCKER: output normalization unavailable` |
 | A process started by the run cannot be stopped | `BLOCKER: backend process cleanup failed` |
 

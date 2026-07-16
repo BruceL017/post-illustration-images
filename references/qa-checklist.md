@@ -12,7 +12,7 @@ Run QA after each image, after overlay when `brand_enabled` is true, and before 
 - The source file is a readable raster image and its actual dimensions plus aspect ratio are recorded.
 - Exact Style Spec dimensions pass as `pass-exact`. A different size within ratio tolerance is finalized automatically as `pass-normalized`; requested, source, and final dimensions are recorded.
 - Output outside ratio tolerance fails QA and is never cropped, padded, rotated, or stretched. It is retried with the canonical request size, then blocked after the three-candidate limit without a size question.
-- The deterministic finalizer produces the exact Style Spec canvas with brand overlay enabled or with `--skip-brand true` when branding is disabled.
+- The vendored `resvg-wasm@2.6.2` finalizer produces the exact Style Spec canvas with brand overlay enabled or with `--skip-brand true` when branding is disabled.
 - The request process exited and no child process started by the request remains active.
 - Saved prompts, manifests, logs, and delivery notes contain no credentials or secret fragments.
 
@@ -49,6 +49,7 @@ Run when `brand_enabled` resolves true. Skip when it resolves false, whether fro
 - The image model did not draw a logo, `TF`, `Tranfu`, watermark, or brand sticker.
 - The image model did not draw a placeholder frame, reserve box, guide outline, empty label, or visible marker for the brand slot.
 - The real brand asset was overlaid after generation.
+- The final PNG visibly contains the approved mark inside `brandSlot`; dimensions alone do not prove that overlay succeeded.
 - The asset matches `references/brand.md`.
 - Placement and size follow the selected Style Spec's `brandSlot`.
 - The selected Style Spec's `brandSlot` is enabled and anchored at `top-right`.
@@ -64,7 +65,7 @@ When branding resolves false, record `brand_qa_status: disabled-by-user` for a u
 - Sequence has a clear reading order through filenames and manifest records, not through model-drawn page badges.
 - No two images repeat the same core meaning.
 - Filename order matches the sequence.
-- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, Brand Plugin default/override/source/final state, QA statuses, and residual risks.
+- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, flat `brand_overlay_renderer: resvg-wasm@2.6.2`, Brand Plugin default/override/source/final state, QA statuses, and residual risks.
 
 ## Fallback Rules
 

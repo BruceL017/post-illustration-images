@@ -106,7 +106,7 @@ Use references by need, not all at once:
 - Inspect the selected `style_reference` before Section 8 delivery QA. Inspect it earlier when QA finds style drift or a regeneration is needed.
 - Read `references/product-design.md` only when maintaining or extending this skill.
 
-Resolve `references/`, `assets/`, and `scripts/` from the skill root. User source content and generated outputs are project-relative or absolute user paths. Deterministic commands should be run from the skill root, for example `cd <skill-root> && node scripts/check-rsvg-convert.mjs`.
+Resolve `references/`, `assets/`, `scripts/`, and `vendor/` from the skill root. User source content and generated outputs are project-relative or absolute user paths. Run deterministic commands from the skill root so the finalizer can load its vendored renderer, even when output paths are elsewhere.
 
 ## Workflow
 
@@ -188,12 +188,7 @@ Exit when `AnalysisSummary.main_line`, `core_claim`, `audience_value`, `expressi
 8. Run `node scripts/resolve-brand-policy.mjs --style-spec <selected_style_bundle.style_spec> --override <brand_override-or-null>` and set `{ brand_enabled, brand_policy_default_enabled, brand_override, brand_policy_source }` from its output.
 9. Set `selected_style_bundle = { style_id, platform, style_file, style_spec, style_reference?, brand_policy, brand_slot_enabled }`.
 10. Happy path order is: select and read `style_file`/`style_spec` -> validate the brand slot -> resolve `brand_enabled` -> verify the final raster renderer.
-11. Run `cd <skill-root> && node scripts/check-rsvg-convert.mjs` for every production run:
-   - If installed, continue.
-   - If missing, ask whether to install the command shown by the script. Do not install without approval.
-   - If the user declines, stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
-   - After each approved install attempt, run `cd <skill-root> && node scripts/check-rsvg-convert.mjs --record-attempt`. If one check remains, offer one final install attempt and run the recorded check again.
-   - If the second recorded check still fails, show the manual install command and stop with the corresponding blocker above.
+11. Verify the local finalizer before production: require Node.js 22+ and readable `vendor/resvg-wasm/index.js` plus `vendor/resvg-wasm/index_bg.wasm`. The finalizer loads and checksum-verifies vendored `@resvg/resvg-wasm@2.6.2` in-process; do not run `npm install`, install a native SVG renderer, or request an API key for finalization. Use `node scripts/apply-brand-overlay.mjs --self-test` only for release/package diagnostics, not before every image. If the runtime or vendored renderer is unavailable, stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
 
 Rules:
 
@@ -346,13 +341,13 @@ Steps:
 - If the target image is ambiguous or the discovered count conflicts with the user's count, create a quick contact sheet or ask for confirmation before copying candidates into the final output. If ambiguity remains unresolved, stop as `BLOCKER: unresolved target`.
 - For overlays, start from the unbranded/source image when available so the same brand mark is not applied twice.
 - If overlay is requested and no unbranded/source image exists, ask whether to use the current branded image with duplicate-mark risk or regenerate the source. If the user does not choose, stop as `BLOCKER: missing source image`.
-- Keep only the minimal manifest update needed for changed Section 9 keys: `file`, `source_note`, generation/geometry attempts, requested/source/final dimensions, normalization fields, `brand_overlay_status`, `size_check_status`, QA fields, and `residual_risk`. Update bundle-level backend metadata only when a newly verified adapter or model was actually used.
+- Keep only the minimal manifest update needed for changed Section 9 keys: `file`, `source_note`, generation/geometry attempts, requested/source/final dimensions, normalization fields, `brand_overlay_status`, `size_check_status`, QA fields, and `residual_risk`. Update bundle-level backend metadata only when a newly verified adapter or model was actually used. Preserve the flat bundle-level `brand_overlay_renderer`; when this finalizer runs, set or backfill it to `resvg-wasm@2.6.2`.
 
 Exit when `ContinuePlan.targets`, `operation`, `source_images`, `output_paths`, and `manifest_rows_to_update` are non-empty where required. Then run only the required overlay, copy, or single-image generation step.
 
 ### 7.5 Finalize Image And Apply Brand When Enabled
 
-Run the deterministic finalizer for every accepted source. Use `--skip-brand false` with the real brand asset when `brand_enabled` is true; use `--skip-brand true` when it is false. The script scales only sources within ratio tolerance and asserts the final Style Spec canvas.
+Run the deterministic finalizer for every accepted source. Use `--skip-brand false` with the real brand asset when `brand_enabled` is true; use `--skip-brand true` when it is false. The script scales only sources within ratio tolerance, asserts the final Style Spec canvas, and renders through the bundled `resvg-wasm@2.6.2` files.
 
 ```bash
 PROJECT_OUTPUT_DIR="$(cd <project-output-dir> && pwd)"
@@ -365,7 +360,7 @@ node scripts/apply-brand-overlay.mjs \
   --output <absolute-final-path>
 ```
 
-Never pass a wrong-ratio source to the finalizer. Keep the unbranded/source image, record the normalization action, and verify the output dimensions before QA. The script has no npm dependency but requires `rsvg-convert`.
+Never pass a wrong-ratio source to the finalizer. Keep the unbranded/source image, record the normalization action, and verify the output dimensions before QA. The finalizer requires Node.js 22+ but no runtime package installation, native SVG command, network access, or API key.
 
 ### 8. QA And Fallback
 
@@ -404,6 +399,7 @@ post_illustration_bundle:
   brand_policy_default_enabled: true
   brand_override: null
   brand_policy_source: style-default
+  brand_overlay_renderer: resvg-wasm@2.6.2
   generation_backend:
     kind: configured-api
     adapter: runtime-configured-adapter
@@ -456,7 +452,7 @@ post_illustration_bundle:
 Final response must include:
 
 - `output_dir`, `image_count`, and `style_id`.
-- `brand_plugin_enabled`, policy default, user override, and `brand_policy_source`.
+- `brand_plugin_enabled`, policy default, user override, `brand_policy_source`, and `brand_overlay_renderer`.
 - Generation backend kind, adapter, model preference/source, resolved model, resolution note, and preflight conclusion without secrets or credential values.
 - Each image's `image_id`, `file`, `placement`, usage, requested/source/final dimensions, and normalization status.
 - QA conclusion using `content_qa_status`, `style_qa_status`, `brand_qa_status`, `set_qa_status`, and `residual_risk`.
@@ -466,7 +462,7 @@ Final response must include:
 - Missing source content: return to Section 1 and ask for the article/note/post.
 - Unknown or unreadable `style_id`, `style_file`, or required `style_spec`: stop before Section 4 and list available candidates.
 - Missing, invalid, duplicate, or internally inconsistent style registry: stop as `BLOCKER: style registry invalid`.
-- `rsvg-convert` missing and installation is not approved: stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
+- Node.js 22+ or the vendored resvg WASM renderer is unavailable: stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
 - Selected production Style Spec lacks an enabled top-right `brandSlot`: stop as `BLOCKER: required production brand slot unavailable`.
 - Generation backend preflight failure: stop with the exact blocker code from `references/generation-backends.md`; do not report a generic native-tool failure when a configured API backend was asserted.
 - `gpt-image-2` has no active channel: refresh model availability once, then stop as `BLOCKER: backend model channel unavailable`; do not apply its geometry profile to another model.

@@ -55,4 +55,6 @@ After image generation, overlay the real brand asset using the selected Style Sp
 
 The deterministic overlay must reject a Style Spec when its brand slot is disabled, not anchored at top-right, outside the matching reserved area or canvas, outside the top-right quadrant, or when `keepBrandReservedAreaClear` is not `true`.
 
-If the renderer dependency is unavailable and installation is not approved or does not succeed, stop as `BLOCKER: required brand overlay unavailable` when branding resolves enabled. A disabled brand state does not bypass final sizing; the normalization-only path stops as `BLOCKER: output normalization unavailable`.
+`scripts/apply-brand-overlay.mjs` loads vendored `@resvg/resvg-wasm@2.6.2` from `vendor/resvg-wasm/` under Node.js 22+. It requires no runtime `npm install`, native SVG renderer, network access, or API key. `--skip-brand false` applies the real asset; `--skip-brand true` skips reading and applying it while preserving deterministic final sizing.
+
+If Node.js 22+ or the vendored renderer is unavailable, stop as `BLOCKER: required brand overlay unavailable` when branding resolves enabled. A disabled brand state does not bypass final sizing; the normalization-only path stops as `BLOCKER: output normalization unavailable`.

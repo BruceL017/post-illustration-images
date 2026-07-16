@@ -53,7 +53,7 @@ prompt_examples:
 - **落盘位置**: `post-illustration-output/<正文短名>/` 落到项目根目录, 绝不写进 skill 目录
 - **完整生产运行产出**: `shot-list.md` (分镜) + `prompts/*.md` (每张一份 prompt) + `manifest.md` (后端、模型、尺寸与 QA 元数据 YAML)
 - **图片路径**: `images/unbranded/*.png` (未叠 logo 的原图) + `images/branded/*.png` (叠完 logo 的成图); 用户明确关闭品牌时原图放 `images/source/*.png`, 最终化图片放 `images/*.png`
-- **最终化副作用**: 会跑 `scripts/apply-brand-overlay.mjs` 统一最终画布并按需叠加品牌; 品牌开启和关闭两种模式都依赖 `rsvg-convert`
+- **最终化副作用**: 会跑 `scripts/apply-brand-overlay.mjs`, 通过内置 `resvg-wasm@2.6.2` 统一最终画布并按需叠加品牌; `--skip-brand true` 只跳过 logo, 不跳过尺寸归一化
 - **生成几何**: 内置样式自动映射到合法的 `gpt-image-2` 请求尺寸; 宽高比落在容差内的返回自动归一化, 不询问尺寸
 - **QA 循环**: 单张失败最多重跑 2 次, 仍不过则退回内容锚点调整, 或征得你同意后留 `residual_risk` 交付
 - **绝不会做**: 让图像模型画 logo / TF / 水印 / 页码框; 一次生成整套轮播; 复制 `style_reference` 的画面语义
@@ -62,7 +62,7 @@ prompt_examples:
 
 **前置**:
 
-存在已验证的运行时原生图像工具或已配置 API 生图后端; 目标平台是公众号 / 小红书 / 知乎 / 微博; 机器上要有 `rsvg-convert` 以确定性输出最终尺寸。用户声明已配置 API 后端时, 预检不得转去公共 key 配置, 也不得猜测官方端点。
+存在已验证的运行时原生图像工具或已配置 API 生图后端; 目标平台是公众号 / 小红书 / 知乎 / 微博; 确定性最终化需要 Node.js 22+。内置最终化器运行时无需 `npm install`、原生 SVG 软件包或 API key。用户声明已配置 API 后端时, 后端预检仍须独立进行, 不得转去公共 key 配置, 也不得猜测官方端点。
 
 **不接的场景**:
 

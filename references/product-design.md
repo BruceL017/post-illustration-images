@@ -72,11 +72,9 @@ intake
    - `scripts/resolve-generation-geometry.mjs` validates that mapping before generation, so built-in styles never require a user size choice.
    - Other image skills are not part of the default route.
    - HTML/CSS rendering is not the main path for this skill.
-   - Deterministic overlay scripts may be used for fixed components after generation.
    - `scripts/apply-brand-overlay.mjs` scales accepted sources within ratio tolerance, validates final dimensions, and applies the brand unless `--skip-brand true` is selected.
-   - `scripts/apply-brand-overlay.mjs` requires `rsvg-convert` and no npm package.
-   - `scripts/check-rsvg-convert.mjs` verifies that dependency and provides install guidance before every production finalization run.
-   - If `rsvg-convert` is still unavailable after two recorded install checks, stop final delivery and provide manual install instructions. Use the brand-overlay blocker when branding is enabled and the output-normalization blocker when it is disabled.
+   - The finalizer loads vendored `@resvg/resvg-wasm@2.6.2` in-process under Node.js 22+; it needs no runtime `npm install`, native SVG renderer, network access, or API key.
+   - If Node.js 22+ or the vendored renderer is unavailable, use the brand-overlay blocker when branding is enabled and the output-normalization blocker when it is disabled.
 
 ## Skill Folder Structure
 
@@ -96,12 +94,21 @@ post-illustration-images/
       zhihu-tech.png
   scripts/
     apply-brand-overlay.mjs
-    check-rsvg-convert.mjs
     generate-style-index.mjs
     install-style-bundle.mjs
     resolve-brand-policy.mjs
     resolve-generation-geometry.mjs
+    test-brand-overlay.mjs
     validate-style-bundle.mjs
+    vendor-resvg-wasm.mjs
+  vendor/
+    resvg-wasm/
+      index.js
+      index_bg.wasm
+      LICENSE
+      VERSION
+      SOURCE.md
+      SHA256SUMS
   references/
     brand.md
     content-structures.md
@@ -159,6 +166,7 @@ When Brand Plugin resolves disabled, retain backend PNGs under `images/source/` 
 - Verified model geometry profile, requested dimensions, and target aspect ratio
 - Credential/model preflight, cleanup-plan, and final cleanup status without secret values
 - Brand Plugin default, user override, policy source, and resolved enabled/disabled state
+- Flat bundle-level `brand_overlay_renderer: resvg-wasm@2.6.2`
 - Shot list path
 - Prompt path
 - Sequence or placement
@@ -213,6 +221,7 @@ The skill is working when a fresh agent can:
 - Resolve legal `gpt-image-2` request dimensions automatically for every built-in style.
 - Record requested, source, and final dimensions; normalize sources within ratio tolerance automatically and reject sources outside tolerance without crop, padding, rotation, or stretch.
 - Finalize exact output dimensions with branding enabled or disabled.
+- Finalize locally with vendored `resvg-wasm@2.6.2` under Node.js 22+ and no runtime package installation or API key.
 - Keep the image set visually consistent.
 - Keep model-drawn brand and page-number badges out of generated images.
 - Resolve Brand Plugin state from the user override and selected Style Spec, then apply the overlay only when enabled and only through the selected top-right slot.
