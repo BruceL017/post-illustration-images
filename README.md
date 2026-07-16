@@ -44,16 +44,17 @@ For images from a previous run, I want to add the logo / append one more shot / 
 
 **Not in scope**:
 
-Pure photography / portrait retouching / product renders / photorealistic brand hero shots — won't trigger; long precise paragraphs baked into the image — won't trigger (native image models can't render them reliably); explicit routing to a different image skill — hand it off.
+Pure photography / portrait retouching / product renders / photorealistic brand hero shots — won't trigger; long precise paragraphs baked into the image — won't trigger (image models can't render them reliably); explicit routing to a different image skill — hand it off.
 
 ## What it produces
 
 **By default, one image is generated at a time, series consistency is carried by the `style_spec`, and brand logos / page numbers / placeholder frames are never drawn by the image model** — these three defaults are the counter-intuitive ones.
 
 - **Output location**: `post-illustration-output/<article-slug>/` under the project root — never written inside the skill directory
-- **Every run produces**: `shot-list.md` (storyboard) + `prompts/*.md` (one prompt file per shot) + `manifest.md` (set-level metadata in YAML)
-- **Image paths**: `images/unbranded/*.png` (originals before logo overlay) + `images/branded/*.png` (logo applied); with branding off, only `images/*.png`
-- **Overlay side effect**: runs `scripts/apply-brand-overlay.mjs` for the logo overlay, which depends on `rsvg-convert` on the machine; on first missing dependency you're asked once whether to install — declining falls back to an unbranded delivery
+- **Completed production run**: `shot-list.md` (storyboard) + `prompts/*.md` (one prompt file per shot) + `manifest.md` (backend, model, geometry, and QA metadata in YAML)
+- **Image paths**: `images/unbranded/*.png` (originals before logo overlay) + `images/branded/*.png` (logo applied); with branding explicitly disabled, raw sources use `images/source/*.png` and finalized images use `images/*.png`
+- **Finalization side effect**: runs `scripts/apply-brand-overlay.mjs` to normalize the final canvas and optionally apply the logo; it requires `rsvg-convert` in both branded and unbranded modes
+- **Generation geometry**: built-in styles map automatically to legal `gpt-image-2` request dimensions; responses within ratio tolerance are normalized without asking for size confirmation
 - **QA loop**: a failing image is retried up to 2 times; still failing, it either falls back to a content-anchor tweak or, with your consent, ships with a `residual_risk` note
 - **Never does**: ask the image model to draw the logo / TF / watermark / page-number frame; generate the whole carousel in one shot; copy the visual semantics of a `style_reference`
 
@@ -61,17 +62,17 @@ Pure photography / portrait retouching / product renders / photorealistic brand 
 
 **Prerequisites**:
 
-Codex / OpenAI native image generation is available; the target platform is WeChat / Xiaohongshu / Zhihu; if the brand overlay is enabled, `rsvg-convert` must be present on the machine (the script checks first, and declining install falls back to unbranded).
+A verified runtime-native image tool or already-configured API image backend is available; the target platform is WeChat / Xiaohongshu / Zhihu; `rsvg-convert` must be present for deterministic final sizing. A declared configured API backend is preflighted without public key provisioning or official-endpoint assumptions.
 
 **Not accepted**:
 
 - Photography / portrait retouching / product renders / photorealistic brand hero shots
-- Images that must carry a long, exact block of prose (native image models aren't stable at that)
+- Images that must carry a long, exact block of prose (image models aren't stable at that)
 - Explicit routing to a different image-generation skill
 
 **Subtle boundaries**:
 
 - "Make me 5" — the 5 is an **upper bound, not a quota**; if the content anchors don't support 5, fewer are delivered instead of padding
 - `style_reference` is a **long-lived QA baseline**; it is never fed in as generation input, nor is its visual semantics copied
-- Whether branding is applied is decided by three tiers: explicit user opt-out > `style_spec` slot not enabled > default off; any one hit means no overlay
+- Branding is default-on. Only an explicit user opt-out disables it; a missing required Style Spec slot blocks branded production instead of silently disabling branding
 - Single-image re-run: only the named image is touched, the whole set is not regenerated; when the pre-overlay original is missing, you're asked whether to accept the risk of re-applying the logo on top of an already-branded image

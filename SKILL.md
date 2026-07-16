@@ -1,11 +1,12 @@
 ---
 name: post-illustration-images
-version: 0.1.0
-author: BruceL017
-updated_at: "2026-07-01"
-origin: own
-allow_exec: true
-description: "Generate stable platform-ready AI illustrations for WeChat official account articles, Xiaohongshu notes, and Zhihu posts. Use when the user asks for post/article/note illustrations, content images, explainer images, cover/content cards, 公众号配图, 小红书组图, 知乎配图, 帮我做配图, or 给文章画几张图. Do NOT trigger when the task is pure photography, portrait/product retouching, photoreal brand campaigns, exact long text inside images, or the user explicitly names another image-generation skill. Safety boundaries: one suite style, one image per generation, no model-drawn logos or page badges."
+description: "Generate stable platform-ready AI illustrations for WeChat official account articles, Xiaohongshu notes, and Zhihu posts through either a runtime-native image tool or an already-configured API backend. Use when the user asks for post/article/note illustrations, content images, explainer images, cover/content cards, 公众号配图, 小红书组图, 知乎配图, 帮我做配图, or 给文章画几张图. Do NOT trigger for pure photography, portrait/product retouching, photoreal brand campaigns, exact long text inside images, or when the user explicitly names another image-generation skill. Safety boundaries: verify the generation backend before production, use one suite style, generate and QA one image at a time, forbid model-drawn logos/page badges, and apply the real top-right brand overlay by default."
+metadata:
+  version: "0.3.0"
+  author: BruceL017
+  updated_at: "2026-07-16"
+  origin: own
+  allow_exec: true
 ---
 
 # Post Illustration Images
@@ -15,18 +16,20 @@ description: "Generate stable platform-ready AI illustrations for WeChat officia
 Do not reduce this workflow to "analyze content -> choose template -> generate image". Stability depends on the middle layers:
 
 ```text
-content analysis
+generation backend preflight
+-> content analysis
 -> content type and expression need
 -> suite-level style_spec
+-> gpt-image-2 generation geometry
 -> anchor selection
 -> shot list
 -> per-image content structure
 -> per-image visual metaphor
 -> selected visual style constraints
--> brand slot reservation when Brand Plugin is enabled
+-> top-right brand slot reservation unless the user explicitly disables branding
 -> single-image prompt without model-drawn brand or page badge
--> native Codex image generation
--> optional Brand Plugin overlay using the selected style_spec slot
+-> verified generation backend
+-> default Brand Plugin overlay using the selected style_spec slot
 -> QA and fallback
 -> saved assets and delivery notes
 ```
@@ -37,25 +40,32 @@ Always read the content before choosing a visual style. Use one suite-level styl
 
 Ownership: edit files in the user's project output folder only. This skill creates or updates `post-illustration-output/<content-slug>/` and never writes generated assets into the skill folder. Do not overwrite an existing `manifest.md`, prompt, or image unless the user explicitly asks to replace it or the current run owns that file.
 
-Named artifact: `PostIllustrationBundle` = `{ output_dir, manifest.md, shot-list.md, prompts/*.md, images/(branded|unbranded|direct)/*.png, final_response_summary }`.
+Named artifact: `PostIllustrationBundle` = `{ output_dir, BackendContext, GenerationGeometry, manifest.md, shot-list.md, prompts/*.md, images/(branded|unbranded|source|direct)/*.png, final_response_summary }`.
 
 Terminology:
 
 - `style_id`: the stable ID from `references/style-index.md`, for example `wechat-doodle`.
 - `style_file`: the selected human-readable Markdown style file under `references/styles/`.
-- `style_spec`: the selected machine-readable `.spec.json`, if present.
+- `style_spec`: the selected machine-readable `.spec.json`; required for every supported production style because it owns the default brand geometry.
 - `style_reference`: the QA-only reference image listed in `references/style-index.md`.
-- `selected_style_bundle`: `{ style_id, platform, style_file, style_spec?, style_reference?, brand_slot_enabled }`.
+- `selected_style_bundle`: `{ style_id, platform, style_file, style_spec, style_reference?, brand_slot_enabled }`.
+- `generation_backend`: a verified runtime-native image tool or already-configured API backend; it is not another image-generation skill.
+- `BackendContext`: `{ kind, adapter, endpoint_source, api_dialect?, model_preference?, model_preference_source, resolved_model, model_resolution_note, credential_access, model_check, process_cleanup_plan, process_cleanup_status }`.
+- `GenerationGeometry`: `{ geometry_profile, resolved_model, requested_dimensions, target_aspect_ratio, final_dimensions, ratio_tolerance, normalization_policy }`.
 
 ## Architecture Boundary
 
 `style_spec` is the authority for each platform visual template. It controls canvas size, aspect ratio, fixed color values, layout, safe areas, negative constraints, and any fixed component slots such as a brand slot.
 
-`style_reference` images are long-lived QA baselines for failure review. They show the expected visual presentation of a style, but they are not generation inputs and their semantic content must never be copied into new images.
+`style_reference` images are long-lived QA baselines for failure review. They show the expected visual presentation of a style, but they are not generation inputs and their semantic content must never be copied into new images. Whether a reference image contains a watermark, and where that watermark appears, never controls production branding.
 
-Brand Plugin is optional and pluggable. It only decides whether a brand is enabled and which brand asset to use. It MUST NOT decide canvas size, color palette, coordinates, or platform layout. Priority: user-explicit-disable > selected `style_spec` brand slot presence > default disabled. Brand Plugin runs only when the user has not disabled it and the selected `style_spec` defines an enabled brand slot.
+Brand Plugin is default-on and user-disableable. It decides whether the user explicitly disabled branding and which brand asset to use. It MUST NOT decide canvas size, color palette, coordinates, or platform layout. Priority: user-explicit-disable > default enabled. Every production `style_spec` MUST define an enabled top-right `brandSlot`; when branding is not explicitly disabled, a missing or disabled slot is a blocking configuration error rather than permission to deliver an unbranded image.
+
+When branding is explicitly disabled, the selected Style Spec still defines the production brand slot for template completeness, but that slot and its reserved area are inactive for the current run. Do not reserve, mark, or QA that brand area.
 
 The image model MUST NOT draw logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step. If the user explicitly requests model-drawn brand text or inline logo simulation, state the QA risk and ask for confirmation before proceeding.
+
+Generation backend selection is separate from visual style selection. Treat an explicit user statement that the current environment has a configured API image backend as authoritative intake context. Do not redirect that user to public API-key setup, do not infer an official endpoint from an `openai`-like provider label, and do not treat a missing shell environment variable as proof that no backend exists. Resolve and verify the active backend using `references/generation-backends.md`.
 
 ## Supported Scope
 
@@ -75,7 +85,7 @@ Conditional support:
 Out of scope:
 
 - Pure photography, portrait retouching, product mockups, or photorealistic brand campaigns.
-- Tasks where exact long text inside images is mandatory. Native image generation may distort text; use short labels and retry with less text if needed.
+- Tasks where exact long text inside images is mandatory. Image models may distort text; use short labels and retry with less text if needed.
 - Any request to route through other image-generation skills unless the user explicitly asks for them.
 
 ## Required References
@@ -87,15 +97,17 @@ Use references by need, not all at once:
 - Read `references/brand.md` unless the user explicitly disables the Brand Plugin.
 - Read `references/content-structures.md` when selecting per-image expression structures.
 - Read `references/prompt-compiler.md` before writing final generation prompts.
+- Read `references/generation-backends.md` during backend preflight and whenever generation fails before producing a valid image artifact.
+- Read `references/gpt-image-2-geometry.spec.json` after selecting a Style Spec and before compiling prompts.
 - Read `references/qa-checklist.md` before delivery or regeneration.
-- When QA finds style drift or a regeneration is needed, inspect the selected `style_reference` from `references/style-index.md` and the selected `style_spec`.
+- Inspect the selected `style_reference` before Section 8 delivery QA. Inspect it earlier when QA finds style drift or a regeneration is needed.
 - Read `references/product-design.md` only when maintaining or extending this skill.
 
 Resolve `references/`, `assets/`, and `scripts/` from the skill root. User source content and generated outputs are project-relative or absolute user paths. Deterministic commands should be run from the skill root, for example `cd <skill-root> && node scripts/check-rsvg-convert.mjs`.
 
 ## Workflow
 
-MUST create and update a task list for the tasks below: Intake, Content Analysis, Select Suite-Level Style Spec, Select Anchors, Build Shot List, Compile Prompts, Generate One Image At A Time, Continue Existing Assets when used, Apply Brand Plugin Overlay when used, QA And Fallback, Save And Deliver.
+MUST create and update a task list for the tasks below: Intake, Preflight Generation Backend, Content Analysis, Select Suite-Level Style Spec, Resolve Generation Geometry, Select Anchors, Build Shot List, Compile Prompts, Generate One Image At A Time, Continue Existing Assets when used, Finalize Image And Apply Brand when enabled, QA And Fallback, Save And Deliver.
 
 ### 1. Intake
 
@@ -106,7 +118,8 @@ MUST create and update a task list for the tasks below: Intake, Content Analysis
    - `style_id`: explicit style ID or `null`.
    - `count`: positive integer or `null`.
    - `output_dir`: user-provided path or default `post-illustration-output/<content-slug>/`.
-   - `brand_disabled`: boolean.
+   - `brand_disabled`: boolean, default `false`; set it to `true` only when the user explicitly requests no watermark, no logo, or no Tranfu branding.
+   - `generation_backend_hint`: `runtime-native`, `configured-api`, or `unknown`; a user statement that an API backend is already configured sets `configured-api`.
 
 2. If `source_content` is missing, ask for the article/note/post content and stop this run until it is provided.
 
@@ -114,13 +127,28 @@ MUST create and update a task list for the tasks below: Intake, Content Analysis
 
 4. If `style_id` and `platform` conflict, or `count` conflicts with a platform format, ask one concise question before selecting style.
 
-5. Produce `IntakeContext` and enter Section 2.
+5. Produce `IntakeContext` and enter Section 1.5.
 
 Exit when:
 
 - `platform` is in `{wechat, xhs, zhihu}`.
 - `source_content` is non-empty or references an existing readable file path.
-- `output_dir`, `requested_output`, `style_id`, `count`, and `brand_disabled` are explicitly set to a value or `null`.
+- `output_dir`, `requested_output`, `style_id`, and `count` are explicitly set to a value or `null`, `brand_disabled` is explicitly set to `true` or `false`, and `generation_backend_hint` is set.
+
+### 1.5 Preflight Generation Backend
+
+1. Read `references/generation-backends.md` completely.
+2. Resolve one backend using this order: explicit user backend instruction -> callable runtime-native image tool -> already-configured API image backend -> `unknown`.
+3. When the user says an API backend is already configured:
+   - Treat that statement as authoritative; do not start public API-key provisioning or ask the user to paste a key.
+   - Use the active configured endpoint and credential path through an adapter that can consume them. A provider label may name an API dialect, not the service operator.
+   - Do not treat a missing shell environment variable as proof that credentials or backend capability are absent.
+4. Verify without exposing secrets: adapter availability, credential accessibility to that adapter, endpoint source, API dialect when relevant, and `gpt-image-2` availability for the built-in production styles. A stored default model is not availability proof, and another model must not inherit the `gpt-image-2` geometry profile.
+5. Do not assume a child process inherits the parent runtime's tools, credentials, or endpoint. Do not use a nested fallback until a non-billable capability preflight proves it exposes a usable image-artifact output contract in this environment; the first-image canary proves actual output.
+6. Do not mine backup configs or unrelated credential stores as the normal routing path. If active configuration cannot be consumed, stop with the precise integration blocker from `references/generation-backends.md`.
+7. Set `BackendContext`. Backend preflight does not generate a production image; Section 7 performs the first-image canary after prompts exist.
+
+Exit when `BackendContext.kind`, `adapter`, `endpoint_source`, `resolved_model`, `credential_access`, `model_check`, and `process_cleanup_plan` are set to verified values/pass. Set `process_cleanup_status: not-run` until the first request exits, then update it after every request. Record any configured/user model preference separately from the resolved live model. Otherwise stop with a specific backend blocker; never collapse these failures into “native image generation unavailable.”
 
 ### 2. Content Analysis
 
@@ -151,16 +179,17 @@ Exit when `AnalysisSummary.main_line`, `core_claim`, `audience_value`, `expressi
 2. If the user provided `style_id` and it is not listed, show available candidates for the platform and ask the user to choose or approve automatic selection.
 3. If no style is specified, select the best `style_id` for `platform` and `AnalysisSummary.expression_need`.
 4. Read the selected `style_file` completely.
-5. If the selected row has `style_spec`, read it before building the shot list. If `style_file` or required `style_spec` is missing or unreadable, stop before Section 4 and report the missing path.
-6. Set `selected_style_bundle = { style_id, platform, style_file, style_spec?, style_reference?, brand_slot_enabled }`.
-7. Compute `brand_enabled = !brand_disabled && selected_style_bundle.brand_slot_enabled`.
-8. Happy path order is: select and read `style_file`/`style_spec` -> determine `brand_enabled` -> run `rsvg-convert` checks only when `brand_enabled` is true.
-9. If `brand_enabled` is true, run `cd <skill-root> && node scripts/check-rsvg-convert.mjs`:
+5. Read the selected `style_spec` before building the shot list. If `style_file` or `style_spec` is missing or unreadable, stop before Section 4 and report the missing path.
+6. Set `selected_style_bundle = { style_id, platform, style_file, style_spec, style_reference?, brand_slot_enabled }`.
+7. If `brand_disabled` is false, validate that the selected `style_spec` defines an enabled top-right `brandSlot`. If it does not, stop as `BLOCKER: required production brand slot unavailable`.
+8. Compute `brand_enabled = !brand_disabled`. Production branding does not depend on whether the Style Reference contains a watermark.
+9. Happy path order is: select and read `style_file`/`style_spec` -> validate the default brand slot -> determine `brand_enabled` -> verify the final raster renderer.
+10. Run `cd <skill-root> && node scripts/check-rsvg-convert.mjs` for every production run:
    - If installed, continue.
    - If missing, ask whether to install the command shown by the script. Do not install without approval.
-   - If the user declines or does not answer, set `brand_enabled = false`, continue unbranded, and record this in `manifest.md`.
-   - After an approved install attempt, run `cd <skill-root> && node scripts/check-rsvg-convert.mjs --record-attempt`.
-   - If the second recorded check still fails, set `brand_enabled = false`, show the manual install command, and continue unbranded.
+   - If the user declines, stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
+   - After each approved install attempt, run `cd <skill-root> && node scripts/check-rsvg-convert.mjs --record-attempt`. If one check remains, offer one final install attempt and run the recorded check again.
+   - If the second recorded check still fails, show the manual install command and stop with the corresponding blocker above.
 
 Rules:
 
@@ -169,6 +198,15 @@ Rules:
 - For Zhihu, use the fixed Zhihu style unless future style files add alternatives.
 
 Exit when `selected_style_bundle` and `brand_enabled` are set, and the selected `style_file` plus any required `style_spec` have been read.
+
+### 3.5 Resolve Generation Geometry
+
+1. Run `node scripts/resolve-generation-geometry.mjs --style-spec <selected_style_bundle.style_spec> --model <BackendContext.resolved_model>` from the skill root.
+2. Set `GenerationGeometry` from the script output. Treat `requested_dimensions` as the API request and `final_dimensions` as the authoritative Style Spec canvas.
+3. For every built-in style, resolve the mapped size automatically. Do not ask the user to choose or confirm dimensions.
+4. If the resolved model or ratio has no verified profile, stop as `BLOCKER: backend geometry profile unavailable`; never reuse a different model's size rules.
+
+Exit when `GenerationGeometry.geometry_profile`, `requested_dimensions`, `target_aspect_ratio`, `final_dimensions`, `ratio_tolerance`, and `normalization_policy` are set.
 
 ### 4. Select Anchors
 
@@ -190,7 +228,7 @@ Exit when each selected anchor has `{ anchor_id, source_excerpt, rationale, prio
 
 ### 5. Build Shot List
 
-The shot list is mandatory. If `style_spec` has not been read when present, return to Section 3 before writing the shot list. `shot-list.md` MUST use this markdown bullet order for each image:
+The shot list is mandatory. If `style_spec` has not been read, return to Section 3 before writing the shot list. `shot-list.md` MUST use this markdown bullet order for each image:
 
 - Placement or sequence
 - Topic
@@ -200,7 +238,7 @@ The shot list is mandatory. If `style_spec` has not been read when present, retu
 - Main actor/object action
 - Suggested elements
 - Short labels
-- Fixed component reservations from the selected `style_spec`, if any
+- Fixed component reservations from the selected `style_spec`, including the default top-right brand slot unless explicitly disabled
 - QA risk
 
 Each image MUST express exactly one core idea. If one image contains multiple ideas, split or delete. Save the finalized shot list to `shot-list.md` in the output folder before generating images.
@@ -216,7 +254,7 @@ GOOD:
 - Main actor/object action: A hand moves one highlighted note into a clean frame.
 - Suggested elements: notes, frame, arrow, small checklist marks
 - Short labels: "before", "anchor", "image"
-- Fixed component reservations from the selected `style_spec`, if any: bottom-right brand slot from selected `style_spec`, no important content there
+- Fixed component reservations from the selected `style_spec`: top-right brand slot from selected `style_spec`, no important content there
 - QA risk: model may add extra labels or draw a fake logo
 ```
 
@@ -238,86 +276,46 @@ For each image, combine:
 - Per-image visual metaphor
 - `style_spec` safe areas and fixed component reservations
 - Brand Plugin status from `references/brand.md`
-- Native Codex generation constraints
+- Selected generation backend constraints
+- `GenerationGeometry.target_aspect_ratio`; keep API-only `requested_dimensions` out of the visual prompt
 - Negative constraints from the style and QA references
 
 MUST compile and generate one prompt per image. NEVER ask the image model to create an entire multi-image set in one call.
-Save each final single-image prompt under `prompts/`, for example `prompts/01-cover.md`, before calling native image generation.
+Save each final single-image prompt under `prompts/`, for example `prompts/01-cover.md`, before calling the verified generation backend.
 
 If a style file contains batch language such as "generate the whole set", MUST treat it as planning guidance only. MUST compile and generate one image at a time.
 
 The prompt MUST explicitly forbid model-drawn logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, and visible brand-slot markers. When Brand Plugin is enabled, ask the model to keep the selected `style_spec` brand slot free of important content so the real brand asset can be overlaid after generation. MUST NOT ask the model to visibly "reserve" or "mark" the slot.
 
-WRONG:
-
-```text
-Generate a five-image Xiaohongshu carousel and put the Tranfu logo in the corner of each page.
-```
-
-Reason: this asks for a batch output and model-drawn branding.
-
-GOOD:
-
-```text
-Create image 01-cover only for the selected style_id xhs-explainer-notebook. Use the selected style_file visual system and selected style_spec canvas/safe areas. Core meaning: a clear anchor prevents decorative filler. Visual metaphor: a messy note stack becomes one labeled storyboard frame. Keep text to short labels only: before, anchor, image. Leave the style_spec brand slot free of important content, but do not draw, reserve, mark, frame, or label that slot. Negative constraints: no logo, no TF, no Tranfu, no watermark, no page badge, no placeholder frame, no reserve box, no copied semantic content from the style_reference.
-```
-
-WRONG:
-
-```text
-Copy the example reference image but change the words.
-```
-
-Reason: `style_reference` is QA-only; semantic content from reference images must not be copied.
-
-WRONG:
-
-```text
-Draw an empty dashed rectangle labeled "logo area" in the bottom-right corner.
-```
-
-Reason: visible brand-slot markers and reserve boxes are fixed components, not image-model content.
-
-GOOD:
-
-```text
-Keep important content away from the selected style_spec brand slot. Do not draw, label, outline, reserve, or mark the slot.
-```
-
-WRONG:
-
-```text
-Put this complete paragraph inside the image: "Our new method first parses the article, then builds a reusable abstraction layer, then optimizes every downstream interaction for clarity and conversion."
-```
-
-Reason: exact long text inside generated images is unreliable and out of scope.
-
-GOOD:
-
-```text
-Use at most three short labels: parse, anchor, image.
-```
+Use the complete single-image template and good/bad examples in `references/prompt-compiler.md`; do not duplicate them here.
 
 ### 7. Generate One Image At A Time
 
-MUST use native Codex/OpenAI image generation only. NEVER invoke other image skills unless the user explicitly names a specific alternative image skill. If native image generation is unavailable in the current runtime, stop with a clear blocker and do not silently route to another image tool.
+MUST use the verified `BackendContext` from Section 1.5 and `GenerationGeometry` from Section 3.5. Pass `GenerationGeometry.requested_dimensions` as the API size parameter. NEVER invoke another image-generation skill unless the user explicitly names it.
+
+Do not begin production when credential or model checks are unresolved. Do not silently chain runtime-native, API, child-process, or public-endpoint fallbacks. Resolve a backend failure using `references/generation-backends.md`, then either retry the same verified backend or stop with its precise blocker.
 
 Dispatch generation mode:
 
-- New suite: generate one image per prompt, then run Section 7.5 if `brand_enabled`.
+- New suite: generate the first image as a canary, inspect it, then continue one image per prompt. MUST run Section 7.5 for every accepted source image.
 - Continue existing assets: use Section 7.1.
 - Overlay-only request: use Section 7.5 without regenerating source images.
 - Otherwise: ask one concise question or stop as `BLOCKER: unknown generation mode`.
 
 After each generation:
 
+- Confirm the request process has exited and the output belongs to the current prompt, not a stale cache or previous run. Clean up any process started by this run before retrying or switching operations, then set `process_cleanup_status: pass`; set `fail` and stop if cleanup cannot be verified.
+- Validate that the output is a readable raster image. Record requested, source, and final dimensions plus each `geometry_attempt`. `generation_attempt` counts submitted image candidates only, not metadata/model-list preflight failures.
+- Compare the actual PNG ratio with `style_spec`. Exact canvas dimensions pass as `pass-exact`. A different size within `GenerationGeometry.ratio_tolerance` is accepted as `pass-normalized` and scaled to the final canvas in Section 7.5. Never crop, pad, rotate, or stretch a source outside tolerance.
+- Reject a wrong-ratio candidate and retry the same verified backend with the same canonical request size and stronger orientation/ratio wording. Allow at most three submitted candidates per image; then stop as `BLOCKER: backend output ratio mismatch` without asking the user to choose a size.
+- For the first-image canary, also inspect content meaning, style, short labels, and fixed-component clear areas before generating image 2.
 - Save the image into the current project, not into the skill folder.
 - Recommended output path: `post-illustration-output/<content-slug>/`.
 - Save the finalized shot list as `shot-list.md`.
 - Save final prompts as `prompts/*.md`.
-- Save native generated images under `images/unbranded/` when Brand Plugin is enabled.
+- Save generated source images under `images/unbranded/` when Brand Plugin is enabled.
 - Save post-overlay deliverables under `images/branded/` when Brand Plugin is enabled.
-- If Brand Plugin is disabled, save deliverables under `images/`.
+- If Brand Plugin is disabled, retain raw sources under `images/source/` and save finalized deliverables under `images/`.
 - Use ordered filenames, for example `01-cover.png`, `02-process-breakpoint.png`.
 
 ### 7.1 Continue Existing Assets
@@ -338,24 +336,19 @@ Outputs:
 
 Steps:
 
-- First identify the exact target image set from the current output folder, `manifest.md`, user-provided screenshots/paths, and recent native generation cache when needed.
+- First identify the exact target image set from the current output folder, `manifest.md`, user-provided screenshots/paths, and the verified backend's recent generation cache when needed.
 - Do not regenerate or reprocess the whole set when the request concerns only one or a few existing images.
+- Any newly generated, regenerated, restored, or continued production image receives the default brand overlay unless the user explicitly disables branding; an older unbranded manifest does not disable the current default.
 - If the target image is ambiguous or the discovered count conflicts with the user's count, create a quick contact sheet or ask for confirmation before copying candidates into the final output. If ambiguity remains unresolved, stop as `BLOCKER: unresolved target`.
 - For overlays, start from the unbranded/source image when available so the same brand mark is not applied twice.
 - If overlay is requested and no unbranded/source image exists, ask whether to use the current branded image with duplicate-mark risk or regenerate the source. If the user does not choose, stop as `BLOCKER: missing source image`.
-- Keep only the minimal manifest update needed for changed Section 9 keys: `file`, `source_note`, `brand_overlay_status`, `size_check_status`, QA fields, and `residual_risk`.
+- Keep only the minimal manifest update needed for changed Section 9 keys: `file`, `source_note`, generation/geometry attempts, requested/source/final dimensions, normalization fields, `brand_overlay_status`, `size_check_status`, QA fields, and `residual_risk`. Update bundle-level backend metadata only when a newly verified adapter or model was actually used.
 
 Exit when `ContinuePlan.targets`, `operation`, `source_images`, `output_paths`, and `manifest_rows_to_update` are non-empty where required. Then run only the required overlay, copy, or single-image generation step.
 
-### 7.5 Apply Brand Plugin Overlay
+### 7.5 Finalize Image And Apply Brand When Enabled
 
-If `brand_enabled` is true and the selected `style_spec` defines an enabled brand slot:
-
-- Use the real brand asset from `references/brand.md`.
-- Overlay the asset after image generation. Do not ask the image model to redraw the logo.
-- Use the selected `style_spec` slot, size, and safe-area rules.
-- Keep the unbranded generated image unless the user explicitly asks to replace it.
-- Convert the project output folder to an absolute path before changing directories. Run from the skill root so script and spec paths are stable while `--input` and `--output` still point outside the skill folder:
+Run the deterministic finalizer for every accepted source. Use `--skip-brand false` with the real brand asset when branding is enabled; use `--skip-brand true` when explicitly disabled. The script scales only sources within ratio tolerance and asserts the final Style Spec canvas.
 
 ```bash
 PROJECT_OUTPUT_DIR="$(cd <project-output-dir> && pwd)"
@@ -363,19 +356,19 @@ cd <skill-root>
 node scripts/apply-brand-overlay.mjs \
   --style-spec <selected_style_bundle.style_spec> \
   --brand-svg assets/brand/tranfu-logo-reference.svg \
-  --input "$PROJECT_OUTPUT_DIR/images/unbranded/01-cover.png" \
-  --output "$PROJECT_OUTPUT_DIR/images/branded/01-cover.png"
+  --skip-brand <false-when-enabled-or-true-when-disabled> \
+  --input <absolute-source-path> \
+  --output <absolute-final-path>
 ```
 
-- The overlay command is generic for every brand-enabled `style_spec`, including `wechat-doodle`, `xhs-explainer-notebook`, and `zhihu-tech`.
-- The overlay script has no npm dependency, but it requires `rsvg-convert` to be available on the machine.
+Never pass a wrong-ratio source to the finalizer. Keep the unbranded/source image, record the normalization action, and verify the output dimensions before QA. The script has no npm dependency but requires `rsvg-convert`.
 
 ### 8. QA And Fallback
 
 1. Read `references/qa-checklist.md` before judging output.
-2. Check every image against the QA checklist and selected `style_reference`.
+2. Check every image against the QA checklist and selected `style_reference`. Ignore brand-watermark presence and position in the reference; validate production branding only against the selected `style_spec`.
 3. If all images pass content QA, style QA, brand QA, and set QA, enter Section 9.
-4. If an image fails, identify the reason before retrying. Retry a failed image at most two times after the first failed output.
+4. If an image fails, identify the reason before retrying. Never exceed three submitted candidates total across geometry and visual failures.
 5. If the same image still fails after retries, return to Section 4 for anchor/shot-list adjustment or deliver only with explicit `residual_risk` if the user approves.
 
 If an image fails, identify the reason before retrying:
@@ -393,6 +386,8 @@ If an image fails, identify the reason before retrying:
 
 Create or update `manifest.md` in the output folder using this stable YAML schema. Continuation work in Section 7.1 MUST patch this same schema instead of inventing a separate mini manifest.
 
+Unless the user explicitly disabled branding, `brand_plugin_enabled` MUST be `true`, each final `file` MUST point to `images/branded/`, each `source_file` MUST point to its retained unbranded source, and `brand_overlay_status` MUST be `applied`. If branding is disabled, set both `brand_overlay_status` and `brand_qa_status` to `disabled-by-user`, retain raw sources under `images/source/`, and place finalized files under `images/`.
+
 ```yaml
 post_illustration_bundle:
   output_dir: post-illustration-output/example-slug
@@ -402,6 +397,26 @@ post_illustration_bundle:
   style_spec: references/styles/xhs-style-explainer-notebook.spec.json
   style_reference: assets/style-references/xhs-explainer-notebook.png
   brand_plugin_enabled: true
+  generation_backend:
+    kind: configured-api
+    adapter: runtime-configured-adapter
+    endpoint_source: active-runtime-config
+    api_dialect: openai-compatible
+    model_preference: stored-or-user-model-id
+    model_preference_source: active-config
+    resolved_model: gpt-image-2
+    model_resolution_note: unchanged
+    credential_access: pass
+    model_check: pass
+    process_cleanup_plan: pass
+    process_cleanup_status: pass
+  generation_geometry:
+    geometry_profile: gpt-image-2-v1
+    requested_dimensions: 1152x1536
+    target_aspect_ratio: "3:4"
+    final_dimensions: 1086x1448
+    ratio_tolerance: 0.002
+    normalization_policy: scale-to-canvas-within-tolerance
   shot_list_path: shot-list.md
   images:
     - image_id: 01-cover
@@ -417,8 +432,17 @@ post_illustration_bundle:
       brand_qa_status: pass
       set_qa_status: pass
       brand_overlay_status: applied
-      size_check_status: pass
-      source_note: native generation candidate 1
+      size_check_status: pass-normalized
+      generation_attempt: 1
+      requested_dimensions: "1152x1536"
+      source_dimensions: "<actual-width>x<actual-height>"
+      source_aspect_ratio: 0.75
+      final_dimensions: "<style-spec-width>x<style-spec-height>"
+      normalization_action: scale-to-canvas-within-tolerance
+      normalization_method: deterministic-svg-render
+      geometry_attempts:
+        - { attempt: 1, requested_dimensions: "1152x1536", source_dimensions: "<actual>", status: pass-normalized }
+      source_note: generation candidate 1
       residual_risk: none
 ```
 
@@ -428,15 +452,22 @@ Final response must include:
 - `image_count`.
 - `style_id`.
 - `brand_plugin_enabled`.
+- Generation backend kind, adapter, model preference/source, resolved model, resolution note, and preflight conclusion without secrets or credential values.
 - Each image's `image_id`, `file`, `placement`, and usage.
+- Requested, source, and final dimensions plus normalization status.
 - QA conclusion using `content_qa_status`, `style_qa_status`, `brand_qa_status`, `set_qa_status`, and `residual_risk`.
 
 ## Failure Paths
 
 - Missing source content: return to Section 1 and ask for the article/note/post.
 - Unknown or unreadable `style_id`, `style_file`, or required `style_spec`: stop before Section 4 and list available candidates.
-- `rsvg-convert` missing and user declines install: continue unbranded and record `brand_plugin_enabled: false`; if user required branding, stop as `BLOCKER: brand overlay unavailable`.
-- Native image generation unavailable: stop as `BLOCKER: native image generation unavailable`.
+- `rsvg-convert` missing and installation is not approved: stop as `BLOCKER: required brand overlay unavailable` when branding is enabled or `BLOCKER: output normalization unavailable` when disabled.
+- Selected production Style Spec lacks an enabled top-right `brandSlot`: stop as `BLOCKER: required production brand slot unavailable`.
+- Generation backend preflight failure: stop with the exact blocker code from `references/generation-backends.md`; do not report a generic native-tool failure when a configured API backend was asserted.
+- `gpt-image-2` has no active channel: refresh model availability once, then stop as `BLOCKER: backend model channel unavailable`; do not apply its geometry profile to another model.
+- Resolved model or Style Spec ratio has no verified geometry mapping: stop as `BLOCKER: backend geometry profile unavailable`.
+- Three submitted candidates for one image all have the wrong ratio: stop as `BLOCKER: backend output ratio mismatch` without asking the user to choose a size.
+- Backend process exits without a current valid image artifact or leaves a child process running: clean up only processes started by this run, then stop as `BLOCKER: backend output unavailable` or `BLOCKER: backend process cleanup failed`.
 - QA failure after retry limit: return to Section 4 for anchor revision or record `residual_risk` only with user approval.
 - User changes platform or suite style mid-run: return to Section 3, mark previous shot list superseded, and do not mix styles inside one bundle.
 
@@ -448,10 +479,19 @@ Final response must include:
 - MUST make every image express one core meaning.
 - MUST use content expression structure to organize information.
 - MUST use visual metaphor to turn abstraction into a concrete scene.
+- MUST verify one `BackendContext` before content production and use that same backend until an explicit user change or a newly verified replacement.
+- MUST treat a user's statement that an API backend is already configured as authoritative; MUST NOT redirect that user to public API-key setup or infer an official endpoint from a provider/dialect label.
+- MUST NOT treat missing shell environment variables as proof that configured backend credentials are absent.
+- MUST NOT assume child processes inherit parent tools, endpoint, credentials, or image-generation capability.
+- MUST resolve built-in style request dimensions from the verified `gpt-image-2` geometry profile without asking the user to confirm sizes.
 - MUST treat the suite-level `style_spec` as authority for platform appearance, dimensions, colors, layout, safe areas, and fixed component slots.
-- MUST enable Brand Plugin only when the user has not disabled it and the selected `style_spec` defines an enabled brand slot.
+- MUST enable Brand Plugin for every production image unless the user explicitly disables branding.
+- MUST require every production `style_spec` to define an enabled top-right `brandSlot`.
+- MUST treat Style Reference watermark presence and position as irrelevant to production branding.
+- MUST apply the real brand SVG overlay before delivery when Brand Plugin is enabled.
 - MUST NOT let Brand Plugin behave as a global visual system.
 - MUST NOT let the image model draw brand logos, page-number badges, placeholder frames, reserve boxes, or visible brand-slot markers.
 - MUST generate and QA one image at a time.
-- MUST save `shot-list.md`, `prompts/*.md`, and `manifest.md` for every run.
+- MUST record requested, actual source, and final geometry; normalize sources within ratio tolerance automatically and reject sources outside tolerance without cropping, padding, rotating, or stretching.
+- MUST save `shot-list.md`, `prompts/*.md`, and `manifest.md` for every completed production run. On an earlier blocker, save only artifacts whose workflow stage was actually reached; never fabricate later-stage files or QA passes.
 - MUST save generated assets outside the skill folder.

@@ -1,6 +1,20 @@
 # QA Checklist
 
-Run QA after each image, after optional overlays, and before delivery.
+Run QA after each image, after the default brand overlay, and before delivery. Skip overlay QA only when the user explicitly disabled branding.
+
+## Backend And Artifact QA
+
+- `BackendContext` records one verified runtime-native or configured API backend.
+- Credential access and model availability preflight passed without exposing secret values.
+- The resolved model is currently image-capable; a stored default alone is not accepted as proof. Any difference between model preference and resolved model is recorded with its reason.
+- `GenerationGeometry` comes from the verified model profile, and its request size satisfies that profile before submission.
+- The image artifact belongs to the current prompt/request, not a stale cache or earlier run.
+- The source file is a readable raster image and its actual dimensions plus aspect ratio are recorded.
+- Exact Style Spec dimensions pass as `pass-exact`. A different size within ratio tolerance is finalized automatically as `pass-normalized`; requested, source, and final dimensions are recorded.
+- Output outside ratio tolerance fails QA and is never cropped, padded, rotated, or stretched. It is retried with the canonical request size, then blocked after the three-candidate limit without a size question.
+- The deterministic finalizer produces the exact Style Spec canvas with brand overlay enabled or with `--skip-brand true` when branding is disabled.
+- The request process exited and no child process started by the request remains active.
+- Saved prompts, manifests, logs, and delivery notes contain no credentials or secret fragments.
 
 ## Content QA
 
@@ -20,26 +34,28 @@ Run QA after each image, after optional overlays, and before delivery.
 - Canvas size and page orientation follow the selected Style Spec unless explicitly overridden.
 - Fixed palette follows the selected Style Spec closely enough for the platform template.
 - The selected style has one Style Reference image, and the generated image matches its baseline visual system.
-- Style Reference comparison ignores semantic content and checks only palette, texture, spacing, typography feel, icon/illustration style, composition language, and fixed-component treatment.
+- Style Reference comparison ignores semantic content and checks only palette, texture, spacing, typography feel, icon/illustration style, composition language, and non-brand fixed-component treatment.
+- Style Reference watermark presence, absence, and position are ignored; production branding is validated only against the selected Style Spec.
 - Content stays inside the selected Style Spec's content safe area.
-- Fixed component reserved areas stay clear.
+- Active fixed component reserved areas stay clear. When Brand Plugin is explicitly disabled, do not enforce the brand slot or brand reserved area.
 - Page-number badges are absent unless the selected Style Spec explicitly enables them.
 - Template-level components do not move randomly between images.
-- Fixed component slots are not visibly marked by placeholder frames, reserve boxes, guide outlines, empty labels, or stickers.
+- Active fixed component slots are not visibly marked by placeholder frames, reserve boxes, guide outlines, empty labels, or stickers.
 
 ## Brand Plugin QA
 
-Run only when Brand Plugin is enabled.
+Run by default for every production image. Skip only when the user explicitly disabled Brand Plugin.
 
 - The image model did not draw a logo, `TF`, `Tranfu`, watermark, or brand sticker.
 - The image model did not draw a placeholder frame, reserve box, guide outline, empty label, or visible marker for the brand slot.
 - The real brand asset was overlaid after generation.
 - The asset matches `references/brand.md`.
 - Placement and size follow the selected Style Spec's `brandSlot`.
+- The selected Style Spec's `brandSlot` is enabled and anchored at `top-right`.
 - The brand overlay does not block body text, labels, icons, or key visual elements.
 - There is only one brand mark unless the selected Style Spec explicitly allows more.
 
-If Brand Plugin is disabled, QA should record `Brand Plugin: disabled`, not fail the run.
+If the user explicitly disabled Brand Plugin, record `brand_qa_status: disabled-by-user`, not a failure. Any other unbranded production image fails Brand Plugin QA.
 
 ## Set-Level QA
 
@@ -48,7 +64,7 @@ If Brand Plugin is disabled, QA should record `Brand Plugin: disabled`, not fail
 - Sequence has a clear reading order through filenames and manifest records, not through model-drawn page badges.
 - No two images repeat the same core meaning.
 - Filename order matches the sequence.
-- `manifest.md` records platform, selected Style Spec, Brand Plugin enabled/disabled, Content QA, Style Spec QA, Brand Plugin QA, and residual risks.
+- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, Brand Plugin state, QA statuses, and residual risks.
 
 ## Fallback Rules
 
@@ -63,6 +79,7 @@ If Brand Plugin is disabled, QA should record `Brand Plugin: disabled`, not fail
 | Model drew a brand-slot placeholder frame, reserve box, or guide outline | Regenerate with explicit "no placeholder frame/no reserve box/no visible brand-slot marker" constraints before overlay. |
 | Brand overlay blocks content | Regenerate with the Style Spec brand slot kept clear, or revise that Style Spec's slot. |
 | Page-number badge appears | Regenerate with page badge forbidden. |
+| Output ratio falls outside the Style Spec tolerance | Retry the same canonical request size with stronger orientation/ratio wording; never ask the user to choose a size. |
 | Layout is empty | Add one content card, conclusion bar, icon group, or action detail. |
 | Layout is crowded | Remove secondary labels and reduce visual elements. |
 

@@ -17,6 +17,7 @@ function usage() {
 Options:
   --style-spec <path>   Defaults to references/styles/xhs-style-explainer-notebook.spec.json
   --brand-svg <path>    Defaults to assets/brand/tranfu-logo-reference.svg
+  --skip-brand <bool>   Use true to normalize without reading or applying a brand asset
 `);
 }
 
@@ -87,7 +88,7 @@ function ensureRsvgConvert() {
   try {
     execFileSync("sh", ["-lc", "command -v rsvg-convert"], { stdio: "ignore" });
   } catch {
-    throw new Error(`rsvg-convert is required for brand overlay but is not installed. ${dependencyInstallHint()}`);
+    throw new Error(`rsvg-convert is required for final raster rendering but is not installed. ${dependencyInstallHint()}`);
   }
 }
 
@@ -95,18 +96,66 @@ function aspectRatioMatches(size, canvas, tolerance) {
   return Math.abs(size.width / size.height - canvas.width / canvas.height) <= tolerance;
 }
 
-function renderOne({ input, output, spec, brandSvg }) {
+function validateCanvasGeometry(spec) {
   const canvas = spec.canvas;
+
+  if (!Number.isFinite(canvas?.width) || !Number.isFinite(canvas?.height) || canvas.width <= 0 || canvas.height <= 0) {
+    throw new Error(`Style Spec ${spec.id} has invalid canvas dimensions`);
+  }
+  return canvas;
+}
+
+function validateBrandGeometry(spec) {
+  const canvas = validateCanvasGeometry(spec);
+  const reserved = spec.layout?.brandReservedArea;
   const slot = spec.fixedComponents?.brandSlot;
+
   if (!slot?.enabled) {
     throw new Error(`Style Spec ${spec.id} has no enabled brandSlot`);
   }
+  if (slot.anchor !== "top-right") {
+    throw new Error(`Style Spec ${spec.id} brandSlot must use the top-right anchor`);
+  }
+  if (spec.generationConstraints?.keepBrandReservedAreaClear !== true) {
+    throw new Error(`Style Spec ${spec.id} must keep its brandReservedArea clear`);
+  }
+
+  for (const [name, rect] of [["brandReservedArea", reserved], ["brandSlot", slot]]) {
+    if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) {
+      throw new Error(`Style Spec ${spec.id} has invalid ${name} geometry`);
+    }
+  }
+
+  if (reserved.x < 0 || reserved.y < 0 || reserved.x + reserved.width > canvas.width || reserved.y + reserved.height > canvas.height) {
+    throw new Error(`Style Spec ${spec.id} brandReservedArea must stay inside the canvas`);
+  }
+  if (slot.x < reserved.x || slot.y < reserved.y || slot.x + slot.width > reserved.x + reserved.width || slot.y + slot.height > reserved.y + reserved.height) {
+    throw new Error(`Style Spec ${spec.id} brandSlot must stay inside brandReservedArea`);
+  }
+  if (reserved.x < canvas.width / 2 || reserved.y + reserved.height > canvas.height / 2) {
+    throw new Error(`Style Spec ${spec.id} brandReservedArea must be in the top-right quadrant`);
+  }
+
+  return { canvas, slot };
+}
+
+function parseBoolean(value, name) {
+  if (value === undefined) return false;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function renderOne({ input, output, spec, brandSvg, skipBrand }) {
+  const canvas = validateCanvasGeometry(spec);
+  const slot = skipBrand ? null : validateBrandGeometry(spec).slot;
 
   ensureRsvgConvert();
 
   const size = readPngSize(input);
   if (size.width !== canvas.width || size.height !== canvas.height) {
-    const canResize = spec.inputHandling?.allowSameAspectRatioResize === true;
+    const canResize = spec.inputHandling?.allowWithinToleranceResize === true &&
+      spec.inputHandling?.withinToleranceResizeMode === "scale-to-canvas";
     const tolerance = spec.inputHandling?.ratioTolerance ?? 0.001;
     if (!canResize || !aspectRatioMatches(size, canvas, tolerance)) {
       throw new Error(
@@ -117,22 +166,29 @@ function renderOne({ input, output, spec, brandSvg }) {
 
   mkdirSync(dirname(output), { recursive: true });
 
-  const tempDir = mkdtempSync(join(tmpdir(), "brand-overlay-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "final-image-"));
   const wrapperPath = join(tempDir, "wrapper.svg");
   const imageData = readFileSync(input).toString("base64");
-  const brandData = Buffer.from(readFileSync(brandSvg, "utf8"), "utf8").toString("base64");
   const imageHref = `data:image/png;base64,${imageData}`;
-  const brandHref = `data:image/svg+xml;base64,${brandData}`;
+  let brandElement = "";
+  if (!skipBrand) {
+    const brandData = Buffer.from(readFileSync(brandSvg, "utf8"), "utf8").toString("base64");
+    const brandHref = `data:image/svg+xml;base64,${brandData}`;
+    brandElement = `\n  <image href="${brandHref}" x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" preserveAspectRatio="xMidYMid meet"/>`;
+  }
 
   const wrapper = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">
-  <image href="${imageHref}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="none"/>
-  <image href="${brandHref}" x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" preserveAspectRatio="xMidYMid meet"/>
+  <image href="${imageHref}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="none"/>${brandElement}
 </svg>
 `;
 
   try {
     writeFileSync(wrapperPath, wrapper);
     execFileSync("rsvg-convert", ["-f", "png", "-o", output, wrapperPath], { stdio: "pipe" });
+    const outputSize = readPngSize(output);
+    if (outputSize.width !== canvas.width || outputSize.height !== canvas.height) {
+      throw new Error(`${basename(output)} was rendered at ${outputSize.width}x${outputSize.height}, expected ${canvas.width}x${canvas.height}`);
+    }
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -140,6 +196,7 @@ function renderOne({ input, output, spec, brandSvg }) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  const skipBrand = parseBoolean(args["skip-brand"], "--skip-brand");
   const styleSpecPath = args["style-spec"]
     ? resolvePath(args["style-spec"])
     : defaultPath("references/styles/xhs-style-explainer-notebook.spec.json");
@@ -157,7 +214,8 @@ function main() {
       input: resolvePath(args.input),
       output: resolve(process.cwd(), args.output),
       spec,
-      brandSvg: brandSvgPath
+      brandSvg: brandSvgPath,
+      skipBrand
     });
     return;
   }
@@ -173,7 +231,8 @@ function main() {
         input,
         output: join(outputDir, basename(input)),
         spec,
-        brandSvg: brandSvgPath
+        brandSvg: brandSvgPath,
+        skipBrand
       });
     }
     return;

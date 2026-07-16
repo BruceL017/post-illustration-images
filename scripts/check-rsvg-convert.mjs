@@ -45,17 +45,16 @@ function installCommand() {
 
 function main() {
   const args = new Set(process.argv.slice(2));
-  const state = readState();
 
   if (commandExists("rsvg-convert")) {
-    writeState({ attempts: 0, lastStatus: "ok", checkedAt: new Date().toISOString() });
-    console.log("rsvg-convert is installed. You can trigger the illustration flow with keywords like 公众号配图, 小红书配图, 知乎配图, or a style ID such as wechat-doodle / xhs-orange-card / zhihu-tech.");
+    console.log("rsvg-convert is installed. Deterministic final sizing and optional brand overlay are available.");
     return;
   }
 
+  const state = readState();
   const attempts = Number(state.attempts || 0);
   if (attempts >= maxAttempts) {
-    console.log(`rsvg-convert is still missing after ${maxAttempts} install checks. Stop here and install it manually: ${installCommand()}. After it succeeds, rerun this check or call the skill again.`);
+    console.log(`rsvg-convert is still missing after ${maxAttempts} install checks. Deterministic final sizing cannot continue. Install it manually: ${installCommand()}. After it succeeds, rerun this check or call the skill again.`);
     process.exitCode = 2;
     return;
   }
@@ -68,13 +67,13 @@ function main() {
   });
 
   if (nextAttempts >= maxAttempts) {
-    console.log(`rsvg-convert is still missing after ${maxAttempts} install checks. Stop here and install it manually: ${installCommand()}. After it succeeds, rerun this check or call the skill again.`);
+    console.log(`rsvg-convert is still missing after ${maxAttempts} install checks. Deterministic final sizing cannot continue. Install it manually: ${installCommand()}. After it succeeds, rerun this check or call the skill again.`);
     process.exitCode = 2;
     return;
   }
 
   const remaining = maxAttempts - nextAttempts;
-  console.log(`rsvg-convert is not installed. It is required for brand overlay styles such as wechat-doodle, xhs-explainer-notebook, and zhihu-tech. Install command: ${installCommand()}`);
+  console.log(`rsvg-convert is not installed. It is required for final sizing on every production style. Install command: ${installCommand()}`);
   console.log(`After installation, rerun: node scripts/check-rsvg-convert.mjs --record-attempt. Remaining install checks before stopping: ${remaining}.`);
   process.exitCode = 1;
 }
