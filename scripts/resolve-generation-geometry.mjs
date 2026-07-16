@@ -89,7 +89,7 @@ function resolveGeometry({ styleSpec, modelProfile, model }) {
   }
 
   const inputHandling = styleSpec.inputHandling;
-  if (inputHandling?.allowWithinToleranceResize !== true) {
+  if (inputHandling?.allowSameAspectRatioResize !== true) {
     throw new Error(`Style Spec ${styleSpec.id} must allow normalization within ratio tolerance`);
   }
   if (inputHandling.outputCanvasIsAuthoritative !== true) {

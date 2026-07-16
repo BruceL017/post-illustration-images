@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`post-illustration-images` turns Chinese post content into stable AI-generated illustration assets for WeChat official account articles, Xiaohongshu notes, and Zhihu posts.
+`post-illustration-images` turns Chinese post content into stable AI-generated illustration assets for WeChat official account articles, Xiaohongshu notes, Zhihu posts, and Weibo feed posts.
 
 The product goal is not to store one magical prompt. The goal is to productize a repeatable image workflow:
 
@@ -19,7 +19,7 @@ intake
 -> per-image metaphor
 -> first-image canary through verified generation backend
 -> remaining images one at a time
--> deterministic finalization and default Brand Plugin overlay
+-> deterministic finalization and resolved Brand Plugin overlay
 -> QA
 -> saved assets
 ```
@@ -28,6 +28,7 @@ intake
 
 1. Style details live outside `SKILL.md`.
    - Full style prompts are stored in `references/styles/`.
+   - `references/style-registry.json` is the machine-readable routing authority; `references/style-index.md` is its generated human-readable view.
    - `SKILL.md` only routes and enforces the process.
    - This keeps future style additions cheap.
 
@@ -50,11 +51,12 @@ intake
    - Structure organizes information relationships.
    - Metaphor turns abstract content into a concrete scene.
 
-6. Brand Plugin is default-on, user-disableable, and slot-bound.
+6. Brand Plugin is style-defaulted, user-overridable, and slot-bound.
    - Brand enablement and assets live in `references/brand.md`.
    - Brand assets live in `assets/brand/`.
    - The selected Style Spec controls brand placement and size.
    - Every production Style Spec defines an enabled top-right brand slot and matching reserved area.
+   - Enablement resolves from an explicit user override, then `brandPolicy.defaultEnabled`, then legacy default `true`.
    - Missing overlay capability blocks branded delivery; disabling branding skips the logo but not deterministic final sizing.
    - Model generation must not draw brand logos.
 
@@ -95,7 +97,11 @@ post-illustration-images/
   scripts/
     apply-brand-overlay.mjs
     check-rsvg-convert.mjs
+    generate-style-index.mjs
+    install-style-bundle.mjs
+    resolve-brand-policy.mjs
     resolve-generation-geometry.mjs
+    validate-style-bundle.mjs
   references/
     brand.md
     content-structures.md
@@ -104,7 +110,9 @@ post-illustration-images/
     product-design.md
     prompt-compiler.md
     qa-checklist.md
+    style-bundle-contract.md
     style-index.md
+    style-registry.json
     styles/
       wechat-style-doodle.md
       wechat-style-doodle.spec.json
@@ -116,6 +124,7 @@ post-illustration-images/
       xhs-style-orange-card.spec.json
       zhihu-style-title.md
       zhihu-style-title.spec.json
+      <visual-builder-style-id>.provenance.json
 ```
 
 ## Default Output Contract
@@ -138,7 +147,7 @@ post-illustration-output/<content-slug>/
   manifest.md
 ```
 
-When the user explicitly disables Brand Plugin, retain backend PNGs under `images/source/` and write finalized PNGs directly under `images/`. Otherwise the branded PNG is the production deliverable and the unbranded PNG is retained as its source.
+When Brand Plugin resolves disabled, retain backend PNGs under `images/source/` and write finalized PNGs directly under `images/`. Otherwise the branded PNG is the production deliverable and the unbranded PNG is retained as its source.
 
 `manifest.md` records:
 
@@ -149,7 +158,7 @@ When the user explicitly disables Brand Plugin, retain backend PNGs under `image
 - Verified generation backend kind, adapter, endpoint source, API dialect when relevant, model preference/source, resolved model, and resolution note
 - Verified model geometry profile, requested dimensions, and target aspect ratio
 - Credential/model preflight, cleanup-plan, and final cleanup status without secret values
-- Brand Plugin enabled/disabled
+- Brand Plugin default, user override, policy source, and resolved enabled/disabled state
 - Shot list path
 - Prompt path
 - Sequence or placement
@@ -159,20 +168,18 @@ When the user explicitly disables Brand Plugin, retain backend PNGs under `image
 - Content QA status
 - Style Spec QA status
 - Brand Plugin QA status, if enabled
-- Brand overlay status; `applied` by default or `disabled-by-user` only after an explicit opt-out
+- Brand overlay status: `applied`, `disabled-by-user`, or `disabled-by-style-default`
 - Generation and geometry attempts, requested/source/final dimensions, and normalization action
 
 ## Extension Rules
 
 To add a new visual style:
 
-1. Add the full style prompt to `references/styles/<style-id>.md`.
-2. Add a row to `references/style-index.md`.
-3. Add one long-lived style reference image to `assets/style-references/<style-id>.png`.
-4. Include platform, default use, routing hints, Style Reference path, and a machine-readable Style Spec; it is required for default brand-overlay geometry.
-5. Add `styleReference.image`, `styleReference.usage`, `styleReference.contentPolicy`, and `styleReference.isGenerationInput` to the machine spec.
-6. Add an enabled top-right `fixedComponents.brandSlot`, a matching `layout.brandReservedArea`, and `generationConstraints.keepBrandReservedAreaClear: true`.
-7. Do not copy the full style prompt into `SKILL.md`.
+1. Build an approved `StyleCandidateBundle` outside this skill.
+2. Run `node scripts/validate-style-bundle.mjs --bundle <candidate-dir>`.
+3. Run `node scripts/install-style-bundle.mjs --bundle <candidate-dir>` only after explicit human approval.
+4. The installer copies the style Markdown, machine spec, provenance, and neutral reference image, updates `style-registry.json`, regenerates `style-index.md`, and refuses duplicate IDs.
+5. Never hand-edit the generated style index or copy source reference images into the skill.
 
 To change brand behavior:
 
@@ -180,6 +187,7 @@ To change brand behavior:
 2. Replace or add assets under `assets/brand/`.
 3. Do not put platform coordinates, colors, or dimensions in `references/brand.md`.
 4. Put placement and size in the selected Style Spec.
+5. Put per-style default enablement in `brandPolicy`; keep user overrides allowed.
 
 To improve quality:
 
@@ -207,7 +215,7 @@ The skill is working when a fresh agent can:
 - Finalize exact output dimensions with branding enabled or disabled.
 - Keep the image set visually consistent.
 - Keep model-drawn brand and page-number badges out of generated images.
-- Apply the Brand Plugin overlay to every production image unless the user explicitly disables it, and only through the selected Style Spec's top-right slot.
+- Resolve Brand Plugin state from the user override and selected Style Spec, then apply the overlay only when enabled and only through the selected top-right slot.
 - Ignore Style Reference watermark presence and position when deciding production branding.
 - Save outputs with a manifest.
 - Explain QA results and fallback decisions.

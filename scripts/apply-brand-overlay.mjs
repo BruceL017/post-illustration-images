@@ -154,7 +154,7 @@ function renderOne({ input, output, spec, brandSvg, skipBrand }) {
 
   const size = readPngSize(input);
   if (size.width !== canvas.width || size.height !== canvas.height) {
-    const canResize = spec.inputHandling?.allowWithinToleranceResize === true &&
+    const canResize = spec.inputHandling?.allowSameAspectRatioResize === true &&
       spec.inputHandling?.withinToleranceResizeMode === "scale-to-canvas";
     const tolerance = spec.inputHandling?.ratioTolerance ?? 0.001;
     if (!canResize || !aspectRatioMatches(size, canvas, tolerance)) {

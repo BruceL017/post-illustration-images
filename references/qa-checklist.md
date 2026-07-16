@@ -1,6 +1,6 @@
 # QA Checklist
 
-Run QA after each image, after the default brand overlay, and before delivery. Skip overlay QA only when the user explicitly disabled branding.
+Run QA after each image, after overlay when `brand_enabled` is true, and before delivery. Skip only overlay-specific checks when `brand_enabled` is false; final sizing QA always runs.
 
 ## Backend And Artifact QA
 
@@ -31,20 +31,20 @@ Run QA after each image, after the default brand overlay, and before delivery. S
 
 ## Style Spec QA
 
-- Canvas size and page orientation follow the selected Style Spec unless explicitly overridden.
+- Canvas size and page orientation follow the selected Style Spec exactly.
 - Fixed palette follows the selected Style Spec closely enough for the platform template.
 - The selected style has one Style Reference image, and the generated image matches its baseline visual system.
 - Style Reference comparison ignores semantic content and checks only palette, texture, spacing, typography feel, icon/illustration style, composition language, and non-brand fixed-component treatment.
 - Style Reference watermark presence, absence, and position are ignored; production branding is validated only against the selected Style Spec.
 - Content stays inside the selected Style Spec's content safe area.
-- Active fixed component reserved areas stay clear. When Brand Plugin is explicitly disabled, do not enforce the brand slot or brand reserved area.
+- Active fixed component reserved areas stay clear. When Brand Plugin resolves disabled, do not enforce the brand slot or brand reserved area.
 - Page-number badges are absent unless the selected Style Spec explicitly enables them.
 - Template-level components do not move randomly between images.
 - Active fixed component slots are not visibly marked by placeholder frames, reserve boxes, guide outlines, empty labels, or stickers.
 
 ## Brand Plugin QA
 
-Run by default for every production image. Skip only when the user explicitly disabled Brand Plugin.
+Run when `brand_enabled` resolves true. Skip when it resolves false, whether from a user override or the selected style default.
 
 - The image model did not draw a logo, `TF`, `Tranfu`, watermark, or brand sticker.
 - The image model did not draw a placeholder frame, reserve box, guide outline, empty label, or visible marker for the brand slot.
@@ -55,7 +55,7 @@ Run by default for every production image. Skip only when the user explicitly di
 - The brand overlay does not block body text, labels, icons, or key visual elements.
 - There is only one brand mark unless the selected Style Spec explicitly allows more.
 
-If the user explicitly disabled Brand Plugin, record `brand_qa_status: disabled-by-user`, not a failure. Any other unbranded production image fails Brand Plugin QA.
+When branding resolves false, record `brand_qa_status: disabled-by-user` for a user override or `disabled-by-style-default` for the selected style default. Any unbranded production image with `brand_enabled: true` fails Brand Plugin QA.
 
 ## Set-Level QA
 
@@ -64,7 +64,7 @@ If the user explicitly disabled Brand Plugin, record `brand_qa_status: disabled-
 - Sequence has a clear reading order through filenames and manifest records, not through model-drawn page badges.
 - No two images repeat the same core meaning.
 - Filename order matches the sequence.
-- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, Brand Plugin state, QA statuses, and residual risks.
+- `manifest.md` records platform, selected Style Spec, verified generation backend/model, requested/source/final dimensions, geometry attempts, normalization status, Brand Plugin default/override/source/final state, QA statuses, and residual risks.
 
 ## Fallback Rules
 

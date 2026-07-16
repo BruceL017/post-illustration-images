@@ -18,7 +18,7 @@ English | [中文](./README.zh.md)
 
 # Post Illustration Images
 
-Generates a full illustration set for a WeChat / Xiaohongshu / Zhihu post in one pass — reading the body, storyboarding, shot-by-shot generation, and QA all handled end-to-end.
+Generates a full illustration set for a WeChat / Xiaohongshu / Zhihu / Weibo post in one pass — reading the body, storyboarding, shot-by-shot generation, and QA all handled end-to-end.
 
 ## When to use it
 
@@ -62,7 +62,7 @@ Pure photography / portrait retouching / product renders / photorealistic brand 
 
 **Prerequisites**:
 
-A verified runtime-native image tool or already-configured API image backend is available; the target platform is WeChat / Xiaohongshu / Zhihu; `rsvg-convert` must be present for deterministic final sizing. A declared configured API backend is preflighted without public key provisioning or official-endpoint assumptions.
+A verified runtime-native image tool or already-configured API image backend is available; the target platform is WeChat / Xiaohongshu / Zhihu / Weibo; `rsvg-convert` must be present for deterministic final sizing. A declared configured API backend is preflighted without public key provisioning or official-endpoint assumptions.
 
 **Not accepted**:
 
@@ -74,5 +74,5 @@ A verified runtime-native image tool or already-configured API image backend is 
 
 - "Make me 5" — the 5 is an **upper bound, not a quota**; if the content anchors don't support 5, fewer are delivered instead of padding
 - `style_reference` is a **long-lived QA baseline**; it is never fed in as generation input, nor is its visual semantics copied
-- Branding is default-on. Only an explicit user opt-out disables it; a missing required Style Spec slot blocks branded production instead of silently disabling branding
+- Branding follows the explicit user override, then the selected style default, then legacy default-on behavior; every style keeps a valid slot so a user can enable branding later
 - Single-image re-run: only the named image is touched, the whole set is not regenerated; when the pre-overlay original is missing, you're asked whether to accept the risk of re-applying the logo on top of an already-branded image
