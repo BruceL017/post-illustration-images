@@ -347,15 +347,14 @@ async function validateRequest(input) {
 
 function expectedGenerateArtifacts(context, plan) {
   if (!Array.isArray(plan?.anchors) || !context.spec) return [];
-  const ids = plan.anchors.map((anchor) => anchor.image_id);
-  const ext = plan.generation_backend?.artifact_format === "png" ? "png" : "jpg";
-  const prompts = ids.map((id) => `${context.spec.promptDir}/${id}.md`);
-  const sources = plan.brand?.enabled
-    ? ids.map((id) => `${context.spec.base}/images/unbranded${context.spec.imageVersion}/${id}.png`) : [];
-  const deliveries = ids.map((id) => plan.brand?.enabled
-    ? `${context.spec.base}/images/branded${context.spec.imageVersion}/${id}.png`
-    : `${context.spec.base}/images${context.spec.imageVersion}/${id}.${ext}`);
-  return [context.spec.bundle, context.spec.manifest, ...prompts, ...sources, ...deliveries];
+  const images = expectedImagePaths(context, plan);
+  return [
+    context.spec.bundle,
+    context.spec.manifest,
+    ...images.map((item) => item.prompt),
+    ...images.map((item) => item.source).filter(Boolean),
+    ...images.map((item) => item.delivery)
+  ];
 }
 
 async function registryStyle(plan, issues) {
@@ -473,7 +472,7 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
     || plan.status !== "READY" || plan.platform !== context.request.platform
     || plan.provider_platform !== context.request.provider_platform || plan.variant !== context.request.variant
     || !sameJson(plan.source, context.request.inputs[0]) || !sameJson(plan.selection, context.request.selection)
-    || !sameJson(plan.options, context.request.options) || plan.residual_risk !== "none") {
+    || !sameJson(plan.options, context.request.options)) {
     add(issues, "invalid_illustration_plan", "plan.json has invalid schema, task lineage, or status.");
   }
   if (plan.residual_risk !== "none") add(issues, "illustration_residual_risk", "Plan residual_risk must be none.");
@@ -622,9 +621,9 @@ async function validateGenerate(context, planValidation) {
     || !sameJson(bundle.plan, { path: context.spec.plan, sha256: context.request.inputs[2].sha256 })
     || !sameJson(bundle.shot_list, { path: context.spec.shot, sha256: context.request.inputs[3].sha256 })
     || !sameJson(bundle.style, plan.style) || !sameJson(bundle.brand, plan.brand)
-    || !sameJson(bundle.generation_backend, expectedBackend) || !validBackend(bundle.generation_backend, "pass")
+    || !sameJson(bundle.generation_backend, expectedBackend)
     || !sameJson(bundle.generation_geometry, plan.generation_geometry)
-    || bundle.image_count !== plan.image_count || bundle.residual_risk !== "none") {
+    || bundle.image_count !== plan.image_count) {
     add(issues, "invalid_illustration_bundle", "bundle.json has invalid schema, lineage, backend, or status.");
   }
   if (bundle.residual_risk !== "none") add(issues, "illustration_residual_risk", "Bundle residual_risk must be none.");
@@ -796,29 +795,17 @@ function makeResult(context, status, artifacts, issues, requestValid = true) {
   };
 }
 
-function resultPath(context) {
-  return context.spec && context.runDir ? resolve(context.runDir, context.spec.result) : null;
-}
-
-async function safeResultTarget(context) {
-  const path = resultPath(context);
-  if (!path || !context.outputDir || !inside(context.outputDir, path)
-    || await hasSymlinkComponent(context.runDir, path, false)) return false;
-  if (!existsSync(path)) return true;
-  const fileStat = await lstat(path);
-  return !fileStat.isSymbolicLink() && fileStat.isFile()
-    && inside(context.outputRealDir, await realpath(path));
-}
-
 async function writeResult(context, status, artifacts, issues, requestValid = true) {
-  if (!await safeResultTarget(context)) throw new Error("Unsafe canonical illustration result target.");
+  if (!await safeOutputTarget(context, context.spec.result)) {
+    throw new Error("Unsafe canonical illustration result target.");
+  }
   const value = makeResult(context, status, artifacts, issues, requestValid);
-  await writeFile(resultPath(context), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await writeFile(resolve(context.runDir, context.spec.result), `${JSON.stringify(value, null, 2)}\n`, "utf8");
   return value;
 }
 
 async function requestFailure(context) {
-  if (context.request && await safeResultTarget(context)) {
+  if (context.request && context.spec && await safeOutputTarget(context, context.spec.result)) {
     const value = await writeResult(context, "BLOCKED", [], context.issues, false);
     emit(value, 2);
   } else {
