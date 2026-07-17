@@ -464,6 +464,8 @@ test("request validation rejects extra inputs, wrong aliases, stale attempts, an
   assert.ok(extraResult.json.issues.some((item) => item.code === "invalid_provider_inputs"));
 
   const alias = await fixture(t, { platform: "xiaohongshu" });
+  const validAlias = await run(["validate-request", alias.requestPath]);
+  assert.equal(validAlias.code, 0, validAlias.stderr || validAlias.stdout);
   alias.request.provider_platform = "xiaohongshu";
   await put(alias.runDir, alias.pathSet.request, `${JSON.stringify(alias.request, null, 2)}\n`);
   const aliasResult = await run(["validate-request", alias.requestPath]);

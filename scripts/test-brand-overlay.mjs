@@ -30,6 +30,7 @@ const styleSpecPaths = [
   "references/styles/xhs-style-explainer-notebook.spec.json",
   "references/styles/xhs-style-orange-card.spec.json",
   "references/styles/zhihu-style-title.spec.json",
+  "references/styles/weibo-signal-core.spec.json",
   "references/styles/toutiao-luminous-tech.spec.json"
 ].map((path) => resolve(skillRoot, path));
 
