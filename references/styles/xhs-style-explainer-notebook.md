@@ -37,7 +37,7 @@
 
 ## 1. 画布
 
-- Canvas: `1086 x 1448 px`
+- Design-coordinate canvas: `1086 x 1448 px`; accepted model output keeps its native pixel dimensions
 - Ratio: `3:4`
 - Orientation: vertical
 - Recommended output: PNG
@@ -65,15 +65,15 @@
 - Outer background: full canvas.
 - Main paper region: approximately `x=52, y=42, w=982, h=1354`.
 - Content safe area: approximately `x=92, y=112, w=902, h=1196`.
-- Brand reserved area: `x=848, y=1328, w=208, h=90`.
-- Keep titles, labels, icons, robots, arrows, cards, and conclusion bars out of the brand reserved area.
+- Brand reserved area: `x=848, y=44, w=208, h=90`.
+- When Brand Plugin is enabled, keep titles, labels, icons, robots, arrows, cards, and conclusion bars out of the brand reserved area.
 - Do not place critical content within `40 px` of the canvas edge.
 
 ## 4. Fixed Components
 
 - Page-number badges: disabled. Do not generate visible `01`, `02`, `03` corner badges.
-- Brand slot: enabled when Brand Plugin is enabled.
-- Brand slot for this style: bottom-right, `x=878, y=1358, w=148, h=40`.
+- Brand slot: enabled by default for every production image unless the user explicitly disables branding.
+- Brand slot for this style: top-right, `x=878, y=64, w=148, h=40`.
 - Brand slot asset: real `TF + Tranfu` SVG overlaid after generation.
 - The image model must not draw `TF`, `Tranfu`, logo shapes, watermarks, brand stickers, placeholder frames, reserve boxes, guide outlines, or visible markers for the brand slot.
 
@@ -87,7 +87,7 @@
 
 - 竖版构图
 - 适合小红书滑动阅读
-- 固定尺寸为 1086 x 1448 px
+- 设计坐标画布为 1086 x 1448 px；模型请求尺寸单独解析，宽高比合格的返回保留原生像素
 - 固定比例为 3:4
 - 画面结构为：外层粉色背景 + 中央白色笔记纸主体
 
@@ -357,7 +357,7 @@
 - 装饰压过正文
 - 数字页码角标
 - 模型生成的 logo、水印或品牌贴纸
-- 右下角品牌槽的占位框、线框、空标签、角标或可见引导线
+- 右上角品牌槽的占位框、线框、空标签、角标或可见引导线
 
 ---
 
@@ -428,7 +428,7 @@
 - 可爱机器人
 - 扁平圆润图标
 - 充实的中下部内容
-- 右下角品牌槽位留白，不生成 logo
+- Brand Plugin 启用时右上角品牌槽位留白；无论是否启用都不生成 logo，生产图片默认在生成后叠加真实 `TF + Tranfu` SVG
 
 ## 第六步：检查质量
 
@@ -463,8 +463,9 @@
 - 图标统一为扁平、圆润、简洁、可爱的风格
 - 不生成页码角标
 - 不生成 logo、水印或品牌贴纸
-- 右下角 `x=848, y=1328, w=208, h=90` 区域不放正文、图标、机器人或结论条，留给后期品牌 SVG 叠加
-- 右下角品牌区域必须保持自然纸面/背景状态，不要画占位框、线框、贴纸、空标签、角标或引导线
+- Brand Plugin 启用时，右上角 `x=848, y=44, w=208, h=90` 区域不放正文、图标、机器人或结论条，留给后期品牌 SVG 叠加
+- 仅 Brand Plugin 启用时要求右上角品牌区域保持自然纸面/背景状态；无论是否启用，都不要画占位框、线框、贴纸、空标签、角标或引导线
+- 除非用户明确禁用品牌，否则生产图片必须在生成后把真实 `TF + Tranfu` SVG 叠加到 `x=878, y=64, w=148, h=40`
 - 整体风格是小红书手账感科普信息图
 - 不是科技炫酷风
 - 不是商务 PPT 风
@@ -544,6 +545,7 @@
 - 是否避免了科技风、商务风、写实风？
 - 是否没有乱加内容？
 - 是否没有数字页码角标？
-- 是否为右下角品牌槽位留出清爽区域？
+- Brand Plugin 启用时，是否为右上角品牌槽位留出清爽区域？
+- 是否在用户未明确禁用品牌时完成了真实 `TF + Tranfu` SVG 叠加？
 
 ---

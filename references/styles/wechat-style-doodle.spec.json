@@ -46,10 +46,20 @@
       "assetFit": "contain"
     }
   },
+  "brandPolicy": {
+    "defaultEnabled": true,
+    "userOverrideAllowed": true
+  },
   "inputHandling": {
-    "allowSameAspectRatioResize": true,
+    "preserveNativeOutput": true,
     "ratioTolerance": 0.002,
-    "outputCanvasIsAuthoritative": true
+    "outputCanvasRole": "design-coordinate-system",
+    "allowPostGenerationResize": false,
+    "allowCrop": false,
+    "allowPadding": false,
+    "allowRotation": false,
+    "allowWrongRatioStretch": false,
+    "wrongRatioAction": "regenerate"
   },
   "generationConstraints": {
     "forbidModelDrawnBrand": true,
@@ -59,7 +69,7 @@
   "styleReference": {
     "image": "assets/style-references/wechat-doodle.png",
     "usage": "QA and failure review only; do not use as generation input or copy its content.",
-    "contentPolicy": "Ignore all semantic content in the reference image. Compare only baseline visual elements, palette, composition language, texture, typography feel, icon/illustration style, spacing, and fixed-component treatment.",
+    "contentPolicy": "Ignore all semantic content in the reference image. Compare only baseline visual elements, palette, composition language, texture, typography feel, icon/illustration style, spacing, and non-brand fixed-component treatment. Ignore whether the reference image contains a brand watermark and ignore its brand position; production branding is controlled only by fixedComponents.brandSlot.",
     "isGenerationInput": false
   }
 }
