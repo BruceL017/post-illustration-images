@@ -21,7 +21,7 @@ const defaultSkillRoot = resolve(scriptDir, "..");
 const platformRegistrations = Object.freeze({
   weibo: Object.freeze({
     displayName: "Weibo",
-    routingPhrases: Object.freeze(["微博", "微博配图", "微博信息流配图", "微博横版信息图"])
+    routingPhrases: Object.freeze(["微博", "微博配图", "微博竖版配图", "微博竖版信息图"])
   }),
   toutiao: Object.freeze({
     displayName: "Toutiao",

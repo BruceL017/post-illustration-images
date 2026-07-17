@@ -14,6 +14,7 @@ const cases = [
   ["references/styles/xhs-style-explainer-notebook.spec.json", "1152x1536", "3:4"],
   ["references/styles/xhs-style-orange-card.spec.json", "1152x1536", "3:4"],
   ["references/styles/zhihu-style-title.spec.json", "2048x1152", "16:9"],
+  ["references/styles/weibo-signal-core.spec.json", "1152x1536", "3:4"],
   ["references/styles/toutiao-luminous-tech.spec.json", "2048x1152", "16:9"]
 ];
 

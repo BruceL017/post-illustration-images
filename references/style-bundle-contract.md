@@ -80,14 +80,14 @@ New candidates use the platform baseline as a design coordinate system, not as r
 | `wechat` | `wechat` | `1600 x 1200` | `4:3` | horizontal |
 | `xhs` | `xiaohongshu` | `1080 x 1440` | `3:4` | vertical |
 | `zhihu` | `zhihu` | `1600 x 900` | `16:9` | horizontal |
-| `weibo` | `weibo` | `1600 x 900` | `16:9` | horizontal |
+| `weibo` | `weibo` | `1080 x 1440` | `3:4` | vertical |
 | `toutiao` | `toutiao` | `1600 x 900` | `16:9` | horizontal |
 
 `style.spec.json` must use the candidate ID, the mapped spec platform, and the exact baseline design canvas. `styleFile` must be `references/styles/<style_id>.md`. Every rectangle under `layout`, including `contentSafeArea` and `brandReservedArea`, must have positive finite dimensions and stay inside that coordinate system.
 
 The content safe area, brand reserved area, and brand slot must equal the platform baseline. `inputHandling` must set `preserveNativeOutput: true`, `outputCanvasRole: "design-coordinate-system"`, `allowPostGenerationResize: false`, and `ratioTolerance: 0.002`; it must forbid crop, padding, rotation, and wrong-ratio stretching and use `wrongRatioAction: "regenerate"`. An accepted model raster owns its delivery pixel dimensions. Toutiao additionally uses `minShortEdge: 900` as an internal calibration quality floor, not an uploader limit.
 
-The Weibo baseline uses content safe area `{ "x": 80, "y": 70, "width": 1440, "height": 760 }`, brand reserved area `{ "x": 1320, "y": 44, "width": 240, "height": 100 }`, and brand slot `{ "x": 1350, "y": 64, "width": 170, "height": 46 }`.
+The Weibo baseline uses content safe area `{ "x": 80, "y": 96, "width": 920, "height": 1248 }`, brand reserved area `{ "x": 842, "y": 44, "width": 208, "height": 90 }`, and brand slot `{ "x": 872, "y": 64, "width": 148, "height": 40 }`.
 
 The formal reference path is `assets/style-references/<style_id>.png`. The spec must declare it under `styleReference.image`, set `styleReference.isGenerationInput` to `false`, and include non-empty `usage` and `contentPolicy` strings. `calibration/style-reference.png` must be byte-identical to the selected unbranded calibration image.
 

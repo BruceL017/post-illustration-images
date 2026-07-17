@@ -20,6 +20,7 @@ Important:
 | `xhs-cream-paper` | Xiaohongshu | `references/styles/xhs-style-cream-paper.md` | `references/styles/xhs-style-cream-paper.spec.json` | `assets/style-references/xhs-cream-paper.png` | spec default, user-overridable | disabled | Warm cream-paper hand-drawn Xiaohongshu infographic base. |
 | `xhs-orange-card` | Xiaohongshu | `references/styles/xhs-style-orange-card.md` | `references/styles/xhs-style-orange-card.spec.json` | `assets/style-references/xhs-orange-card.png` | spec default, user-overridable | disabled | Warm orange torn-paper knowledge-card carousel style. |
 | `zhihu-tech` | Zhihu | `references/styles/zhihu-style-title.md` | `references/styles/zhihu-style-title.spec.json` | `assets/style-references/zhihu-tech.png` | spec default, user-overridable | disabled | Fixed 16:9 modern AI/SaaS/developer-tool infographic. |
+| `weibo-signal-core` | Weibo | `references/styles/weibo-signal-core.md` | `references/styles/weibo-signal-core.spec.json` | `assets/style-references/weibo-signal-core.png` | spec default, user-overridable | disabled | 微博竖版科技概念、流程机制、对比关系与检查清单图解。 |
 | `toutiao-luminous-tech` | Toutiao | `references/styles/toutiao-luminous-tech.md` | `references/styles/toutiao-luminous-tech.spec.json` | `assets/style-references/toutiao-luminous-tech.png` | spec default, user-overridable | disabled | 头条号科技概念、产品机制、流程解释与发布前检查配图。 |
 
 ## Platform Routing
@@ -44,6 +45,13 @@ Use Zhihu when the user says:
 - 回答配图
 - 专栏配图
 
+Use Weibo when the user says:
+
+- 微博
+- 微博配图
+- 微博竖版配图
+- 微博竖版信息图
+
 Use Toutiao when the user says:
 
 - 头条号
@@ -66,6 +74,7 @@ If the platform is not stated and cannot be inferred from the source content, as
 |---|---|
 | 奶油色 / 奶油纸 / 米白色 / 米白纸 / cream paper / cream / off-white paper / 手绘马克笔 / 轻量手账 | `xhs-cream-paper` |
 | 暖橙色 / 暖橙 / 橙色 / 橙色撕纸 / 暖橙撕纸 / orange card / torn paper / Quick Guide / Key Point | `xhs-orange-card` |
+| 信号核心 / 黑底红光科技 / red signal tech | `weibo-signal-core` |
 | 头条号明亮科技 / 今日头条科技配图 / 高调科技 / 柔性3D流程 / luminous tech | `toutiao-luminous-tech` |
 
 Do not preselect image count, aspect ratio, palette, safe area, brand geometry, page badges, or other fixed slots before selecting a style.

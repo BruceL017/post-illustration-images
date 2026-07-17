@@ -56,6 +56,24 @@
       ]
     },
     {
+      "id": "weibo",
+      "specPlatform": "weibo",
+      "displayName": "Weibo",
+      "defaultStyleId": "weibo-signal-core",
+      "canvas": {
+        "width": 1080,
+        "height": 1440,
+        "ratio": "3:4",
+        "orientation": "vertical"
+      },
+      "routingPhrases": [
+        "微博",
+        "微博配图",
+        "微博竖版配图",
+        "微博竖版信息图"
+      ]
+    },
+    {
       "id": "toutiao",
       "specPlatform": "toutiao",
       "displayName": "Toutiao",
@@ -151,6 +169,21 @@
       "provenanceFile": null,
       "aliases": [],
       "defaultUse": "Fixed 16:9 modern AI/SaaS/developer-tool infographic."
+    },
+    {
+      "id": "weibo-signal-core",
+      "displayName": "Weibo 信号核心科技图解",
+      "platform": "weibo",
+      "styleFile": "references/styles/weibo-signal-core.md",
+      "specFile": "references/styles/weibo-signal-core.spec.json",
+      "styleReference": "assets/style-references/weibo-signal-core.png",
+      "provenanceFile": null,
+      "aliases": [
+        "信号核心",
+        "黑底红光科技",
+        "red signal tech"
+      ],
+      "defaultUse": "微博竖版科技概念、流程机制、对比关系与检查清单图解。"
     },
     {
       "id": "toutiao-luminous-tech",

@@ -74,12 +74,12 @@ Generation backend selection is separate from visual style selection. Treat an e
 Strong support:
 
 - WeChat body illustrations, Xiaohongshu cover/content carousels, and Zhihu post illustrations.
+- Weibo vertical 3:4 post illustrations using the registered weibo-signal-core style.
 - Toutiao post illustrations using the registered native 16:9 style.
 - Method, workflow, concept, comparison, checklist, boundary, and decision-flow explainers.
 
 Conditional support:
 
-- Weibo production after an approved Weibo style is installed in the registry; the bundle contract already supports it.
 - Image sets requiring real product screenshots or factual data: require user-provided material. State assumptions only for non-factual illustrative placeholders.
 - Explicit style names: use the matching registered `style_id`, alias, or `style_file` only if it exists in `references/style-registry.json`; unknown styles require user confirmation before fallback.
 - Explicit image count: treat it as a target or ceiling after anchor selection. Anchor quality wins; never create filler images to satisfy a quota.

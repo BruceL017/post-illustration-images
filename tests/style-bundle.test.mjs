@@ -37,10 +37,10 @@ const platformFixtures = Object.freeze({
   }),
   weibo: Object.freeze({
     specPlatform: "weibo",
-    canvas: Object.freeze({ width: 1600, height: 900, ratio: "16:9", orientation: "horizontal" }),
-    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
-    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
-    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+    canvas: Object.freeze({ width: 1080, height: 1440, ratio: "3:4", orientation: "vertical" }),
+    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 }),
+    brandReservedArea: Object.freeze({ x: 842, y: 44, width: 208, height: 90 }),
+    brandSlot: Object.freeze({ x: 872, y: 64, width: 148, height: 40 })
   }),
   toutiao: Object.freeze({
     specPlatform: "toutiao",
@@ -126,6 +126,18 @@ function createSkillRoot(t) {
   cpSync(resolve(repositoryRoot, "references"), resolve(root, "references"), { recursive: true });
   cpSync(resolve(repositoryRoot, "assets"), resolve(root, "assets"), { recursive: true });
   return root;
+}
+
+function removeWeiboRegistration(skillRoot) {
+  const registryPath = resolve(skillRoot, "references/style-registry.json");
+  mutateJson(registryPath, (registry) => {
+    registry.platforms = registry.platforms.filter((platform) => platform.id !== "weibo");
+    registry.styles = registry.styles.filter((style) => style.platform !== "weibo");
+  });
+  writeFileSync(
+    resolve(skillRoot, "references/style-index.md"),
+    renderStyleIndex(json(registryPath))
+  );
 }
 
 function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefault, outputCanvas } = {}) {
@@ -290,7 +302,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
 
 test("existing registry covers all valid production styles and renders deterministically", () => {
   const result = validateInstalledRegistry({ skillRoot: repositoryRoot });
-  assert.equal(result.styles, 6);
+  assert.equal(result.styles, 7);
   const registry = json(resolve(repositoryRoot, "references/style-registry.json"));
   assert.deepEqual(registry.styles.map((style) => style.id), [
     "wechat-doodle",
@@ -298,9 +310,11 @@ test("existing registry covers all valid production styles and renders determini
     "xhs-cream-paper",
     "xhs-orange-card",
     "zhihu-tech",
+    "weibo-signal-core",
     "toutiao-luminous-tech"
   ]);
-  assert.deepEqual(registry.platforms.map((platform) => platform.id), ["wechat", "xhs", "zhihu", "toutiao"]);
+  assert.deepEqual(registry.platforms.map((platform) => platform.id), ["wechat", "xhs", "zhihu", "weibo", "toutiao"]);
+  assert.equal(registry.platforms.find((platform) => platform.id === "weibo").defaultStyleId, "weibo-signal-core");
   assert.equal(registry.platforms.find((platform) => platform.id === "toutiao").defaultStyleId, "toutiao-luminous-tech");
   assert.equal(renderStyleIndex(registry), renderStyleIndex(structuredClone(registry)));
 });
@@ -332,6 +346,7 @@ test("calibration generation metadata must match the native PNG", (t) => {
 
 test("valid approved Weibo bundle passes before Weibo is registered", (t) => {
   const skillRoot = createSkillRoot(t);
+  removeWeiboRegistration(skillRoot);
   const bundleDir = createBundle(t, "weibo-test-template", { platform: "weibo" });
   const result = validateStyleBundle({ bundleDir, skillRoot });
   assert.equal(result.candidate.style.platform, "weibo");
@@ -376,14 +391,12 @@ test("a registered Weibo platform must match its baseline", (t) => {
   const skillRoot = createSkillRoot(t);
   const bundleDir = createBundle(t);
   mutateJson(resolve(skillRoot, "references/style-registry.json"), (registry) => {
-    registry.platforms.push({
-      id: "weibo",
-      specPlatform: "weibo",
-      displayName: "Weibo",
-      defaultStyleId: "xhs-test-template",
-      canvas: { width: 1600, height: 1200, ratio: "4:3", orientation: "horizontal" },
-      routingPhrases: ["微博"]
-    });
+    registry.platforms.find((platform) => platform.id === "weibo").canvas = {
+      width: 1600,
+      height: 1200,
+      ratio: "4:3",
+      orientation: "horizontal"
+    };
   });
   assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /weibo baseline canvas is invalid/);
 });
@@ -591,6 +604,7 @@ test("installer installs without overwrite and regenerates the index", (t) => {
 
 test("first Weibo install atomically registers the platform and new default", (t) => {
   const skillRoot = createSkillRoot(t);
+  removeWeiboRegistration(skillRoot);
   const bundleDir = createBundle(t, "weibo-test-template", { platform: "weibo" });
   const result = installStyleBundle({ bundleDir, skillRoot });
   const registry = json(resolve(skillRoot, "references/style-registry.json"));
@@ -602,8 +616,8 @@ test("first Weibo install atomically registers the platform and new default", (t
     specPlatform: "weibo",
     displayName: "Weibo",
     defaultStyleId: "weibo-test-template",
-    canvas: { width: 1600, height: 900, ratio: "16:9", orientation: "horizontal" },
-    routingPhrases: ["微博", "微博配图", "微博信息流配图", "微博横版信息图"]
+    canvas: { width: 1080, height: 1440, ratio: "3:4", orientation: "vertical" },
+    routingPhrases: ["微博", "微博配图", "微博竖版配图", "微博竖版信息图"]
   });
   assert.equal(validateInstalledRegistry({ skillRoot }).styles, 7);
   assert.match(readFileSync(resolve(skillRoot, "references/style-index.md"), "utf8"), /Use Weibo when the user says:/);
@@ -640,7 +654,7 @@ test("first Toutiao install registers a flexible 16:9 platform default", (t) => 
     },
     routingPhrases: ["头条号", "今日头条", "头条配图", "头条号配图"]
   });
-  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 6);
+  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 7);
 });
 
 test("makeDefault true replaces an existing platform default", (t) => {
@@ -672,6 +686,7 @@ test("installer rolls back files and registry when index generation fails", (t) 
 
 test("failed first Weibo install rolls back the platform registration", (t) => {
   const skillRoot = createSkillRoot(t);
+  removeWeiboRegistration(skillRoot);
   const bundleDir = createBundle(t, "weibo-test-template", { platform: "weibo" });
   const registryPath = resolve(skillRoot, "references/style-registry.json");
   mutateJson(registryPath, (registry) => { registry.indexFile = "blocked/style-index.md"; });
