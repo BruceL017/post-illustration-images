@@ -11,6 +11,23 @@ metadata:
 
 # Post Illustration Images
 
+## Orchestrated Provider Route
+
+Before the standalone workflow, inspect any structured request for `contract: content-production-provider/v1`,
+`capability: illustration`, `provider_contract: illustration-v1`, or the marker below:
+
+```text
+content-production-provider: illustration-v1
+```
+
+If any marker is present, use [`references/orchestrated-provider.md`](references/orchestrated-provider.md)
+and `scripts/provider-contract.mjs`. A partial, conflicting, or invalid provider request returns a
+structured `BLOCKED` result and never falls back to standalone output. Provider mode runs either a
+plan-only pass or an approved generate pass, returns control to the orchestrator, and does not create
+`post-illustration-output/<content-slug>/`.
+
+When no provider marker is present, keep the independent workflow below unchanged.
+
 ## Core Rule
 
 Do not reduce this workflow to "analyze content -> choose template -> generate image". Stability depends on the middle layers:
