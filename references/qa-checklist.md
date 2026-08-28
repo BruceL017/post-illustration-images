@@ -47,10 +47,10 @@ Run QA after each image, after overlay when `brand_enabled` is true, and before 
 
 Run when `brand_enabled` resolves true. Skip when it resolves false, whether from a user override or the selected style default.
 
-- The image model did not draw a logo, `TF`, `Tranfu`, watermark, or brand sticker.
+- The image model did not draw a logo, brand name, watermark, or brand sticker.
 - The image model did not draw a placeholder frame, reserve box, guide outline, empty label, or visible marker for the brand slot.
-- The real brand asset was overlaid after generation.
-- The final PNG visibly contains the approved mark inside `brandSlot`; dimensions alone do not prove that overlay succeeded.
+- The configured brand asset was overlaid after generation.
+- The final PNG visibly contains the configured mark inside `brandSlot`; dimensions alone do not prove that overlay succeeded.
 - The asset matches `references/brand.md`.
 - Placement and size follow the selected Style Spec's `brandSlot`.
 - The selected Style Spec's `brandSlot` is enabled and anchored at `top-right`.
@@ -77,7 +77,7 @@ When branding resolves false, record `brand_qa_status: disabled-by-user` for a u
 | Style drift | Compare with the Style Reference, ignore its semantic content, then reinsert selected Style Spec constraints and negative constraints. |
 | Weak metaphor | Rewrite as physical action plus concrete object. |
 | Looks like PPT | Reduce grid density, title bars, and rigid arrows; emphasize scene/object. |
-| Model drew logo, `TF`, `Tranfu`, or watermark | Regenerate with stronger fixed-component negative constraints. |
+| Model drew a logo, brand name, or watermark | Regenerate with stronger fixed-component negative constraints. |
 | Model drew a brand-slot placeholder frame, reserve box, or guide outline | Regenerate with explicit "no placeholder frame/no reserve box/no visible brand-slot marker" constraints; overlay afterward only when branding is enabled. |
 | Brand overlay blocks content | Regenerate with the Style Spec brand slot kept clear, or revise that Style Spec's slot. |
 | Page-number badge appears | Regenerate with page badge forbidden. |

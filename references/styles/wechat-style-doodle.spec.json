@@ -17,8 +17,7 @@
     "accent.dustyBlue": "#B9CEDB",
     "accent.mintGreen": "#BFD9B6",
     "accent.palePurple": "#D7C6E8",
-    "accent.creamYellow": "#F6D982",
-    "brand.red": "#E63A46"
+    "accent.creamYellow": "#F6D982"
   },
   "layout": {
     "contentSafeArea": {
@@ -47,7 +46,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {

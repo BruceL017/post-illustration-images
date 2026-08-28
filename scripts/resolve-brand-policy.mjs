@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -29,7 +38,7 @@ export function resolveBrandPolicy(styleSpec, override = "null") {
 
   const hasPolicy = styleSpec.brandPolicy !== undefined;
   const policy = styleSpec.brandPolicy ?? {
-    defaultEnabled: true,
+    defaultEnabled: false,
     userOverrideAllowed: true
   };
   if (typeof policy.defaultEnabled !== "boolean" || typeof policy.userOverrideAllowed !== "boolean") {
@@ -69,7 +78,7 @@ function main() {
   console.log(JSON.stringify(resolveBrandPolicy(styleSpec, args.override ?? "null"), null, 2));
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule()) {
   try {
     main();
   } catch (error) {

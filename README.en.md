@@ -16,14 +16,14 @@ prompt_examples:
 
 # Post Illustration Images
 
-A stable content-illustration workflow for WeChat official accounts, Xiaohongshu, Zhihu, Weibo, and Toutiao. It reads the source content before selecting a registered style, building a shot list, generating one image at a time, applying deterministic branding, and validating geometry and quality.
+A stable content-illustration workflow for WeChat official accounts, Xiaohongshu, Zhihu, Weibo, and Toutiao. It reads the source content before selecting a registered style, building a shot list, generating one image at a time, and validating geometry and quality. Brand overlay is off by default and runs only when explicitly enabled.
 
 ## Core capabilities
 
 - **Content-driven planning**: analyzes the source first, then selects content anchors and expression structures; each image carries one core meaning.
 - **Managed styles**: one `style_spec` controls the full set, while the registry owns platform routing, aspect ratio, colors, layout, safe areas, and brand slots.
 - **One image at a time**: compiles, generates, and validates a separate prompt for every image instead of asking the model for a complete carousel.
-- **Deterministic branding**: forbids model-drawn logos, watermarks, and page badges; when enabled, the bundled `resvg-wasm@2.6.2` renderer overlays the real SVG asset.
+- **Optional deterministic branding**: forbids model-drawn logos, watermarks, and page badges; when explicitly enabled with a valid SVG configuration, the bundled `resvg-wasm@2.6.2` renderer overlays that asset.
 - **Native pixel preservation**: accepted images are not cropped, padded, stretched, upscaled, or forced to the Style Spec's design dimensions.
 - **Targeted continuation**: can apply a logo, restore a source, regenerate one image, or append one image without rebuilding the whole set.
 - **Orchestrator contract support**: can act as the `illustration-v1` provider for `content-production-provider/v1`, with strict path, hash, and artifact allowlist enforcement in plan or generate mode.
@@ -59,7 +59,7 @@ The modes never fall back into each other. An invalid or conflicting provider re
 3. Analyze the content, select a registered platform style, and resolve the `gpt-image-2` request geometry.
 4. Select content anchors, save `shot-list.md`, and compile one prompt per image.
 5. Generate and validate one image at a time, using the first image as a canary before continuing.
-6. When branding is enabled, overlay the logo on the same-dimension PNG source; otherwise keep the backend artifact directly.
+6. Keep the backend artifact directly by default; only when branding is explicitly enabled with a valid asset configuration, overlay the logo on the same-dimension PNG source.
 7. Complete content, style, brand, geometry, and set-level QA, then write `manifest.md`.
 
 ## Output structure
@@ -85,7 +85,7 @@ Orchestrated mode writes only the request's authorized `expected_artifacts`. It 
 
 - Requires a verifiable runtime-native image tool or an API image backend already configured in the current environment.
 - The bundled geometry profile applies only to a verified, available `gpt-image-2` channel and is never reused for another model.
-- Node.js 22+ is required only when branding is enabled. The renderer is vendored, so runtime `npm install`, a native SVG tool, and an additional API key are not required.
+- Explicitly enabled branding requires a valid `brand-overlay.config.json` or `--brand-svg`, plus Node.js 22+. The renderer is vendored, so runtime `npm install`, a native SVG tool, and an additional API key are not required.
 - Pure photography, portrait retouching, product renders, photoreal brand campaigns, and images requiring exact long-form text are out of scope.
 - A requested image count is a target or ceiling, not a quota; the workflow does not invent filler images when the content lacks enough anchors.
 - A `style_reference` is used for QA only. It is never a generation input, and its topic, copy, logo, or exact layout must not be reproduced.

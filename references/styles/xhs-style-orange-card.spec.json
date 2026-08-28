@@ -17,7 +17,6 @@
     "accent.green": "#2F7D5B",
     "accent.yellow": "#FFD84A",
     "accent.red": "#F0564A",
-    "brand.red": "#E63A46",
     "surface.lightGreen": "#DCEED7",
     "surface.lightOrange": "#FFE2BF",
     "shadow.warmGray": "#D3A66F"
@@ -91,7 +90,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {

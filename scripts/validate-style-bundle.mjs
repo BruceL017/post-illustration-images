@@ -291,7 +291,7 @@ function rectEquals(actual, expected) {
 
 function validateBrand(spec, candidatePolicy) {
   const policy = spec.brandPolicy;
-  invariant(policy && typeof policy.defaultEnabled === "boolean", "style.spec.json brandPolicy.defaultEnabled must be boolean");
+  invariant(policy?.defaultEnabled === false, "style.spec.json brandPolicy.defaultEnabled must be false");
   invariant(policy.userOverrideAllowed === true, "style.spec.json brandPolicy.userOverrideAllowed must be true");
   if (candidatePolicy) {
     invariant(candidatePolicy.defaultEnabled === policy.defaultEnabled, "candidate and spec brand defaults differ");
@@ -604,7 +604,7 @@ function validateCandidate(candidate) {
   invariant(PLATFORM_BASELINES[style.platform], "candidate.json style.platform is unsupported");
   invariant(style.makeDefault === undefined || typeof style.makeDefault === "boolean", "candidate.json style.makeDefault must be boolean when present");
   validateAliases(style.aliases, "candidate style.aliases");
-  invariant(style.brandPolicy && typeof style.brandPolicy.defaultEnabled === "boolean", "candidate.json style.brandPolicy.defaultEnabled must be boolean");
+  invariant(style.brandPolicy?.defaultEnabled === false, "candidate.json style.brandPolicy.defaultEnabled must be false");
   invariant(style.brandPolicy.userOverrideAllowed === true, "candidate.json style.brandPolicy.userOverrideAllowed must be true");
 
   invariant(candidate.files && typeof candidate.files === "object", "candidate.json files is required");

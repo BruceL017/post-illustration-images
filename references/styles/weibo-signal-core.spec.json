@@ -44,7 +44,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {

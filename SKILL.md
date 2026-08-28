@@ -2,9 +2,9 @@
 name: post-illustration-images
 description: "Generate stable platform-ready AI illustrations for WeChat official account articles, Xiaohongshu notes, Zhihu posts, Toutiao posts, and Weibo posts with a registered style through either a runtime-native image tool or an already-configured API backend. Use when the user asks for post/article/note illustrations, content images, explainer images, cover/content cards, 公众号配图, 小红书组图, 知乎配图, 微博配图, 头条号配图, 今日头条配图, 帮我做配图, or 给文章画几张图. Do NOT trigger for pure photography, portrait/product retouching, photoreal brand campaigns, exact long text inside images, or when the user explicitly names another image-generation skill. Safety boundaries: verify the generation backend before production, use one registered suite style, generate and QA one image at a time, preserve accepted native pixels, forbid model-drawn logos/page badges, and resolve deterministic branding from the user override or selected style policy."
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
   author: BruceL017
-  updated_at: "2026-07-16"
+  updated_at: "2026-08-28"
   origin: own
   allow_exec: true
 ---
@@ -78,11 +78,11 @@ Terminology:
 
 `style_reference` images are long-lived QA baselines for failure review. They show the expected visual presentation of a style, but they are not generation inputs and their semantic content must never be copied into new images. Whether a reference image contains a watermark, and where that watermark appears, never controls production branding.
 
-Brand Plugin resolves enablement in this order: explicit user override -> `style_spec.brandPolicy.defaultEnabled` -> legacy default `true`. `brandPolicy.userOverrideAllowed` MUST be `true` for styles installed by Visual Builder. Brand Plugin MUST NOT decide canvas size, color palette, coordinates, or platform layout. Every production `style_spec` MUST define an enabled top-right `brandSlot` even when its default brand state is disabled, so a later user override can enable deterministic branding without rebuilding the style.
+Brand Plugin resolves enablement in this order: explicit user override -> `style_spec.brandPolicy.defaultEnabled` -> compatibility default `false`. `brandPolicy.userOverrideAllowed` MUST be `true` for styles installed by Visual Builder. Brand Plugin MUST NOT decide canvas size, color palette, coordinates, or platform layout. Every production `style_spec` MUST define an enabled top-right `brandSlot` even when its default brand state is disabled, so a later user override can enable deterministic branding without rebuilding the style.
 
 When the resolved brand state is disabled, the selected Style Spec still defines the production brand slot for template completeness, but that slot and its reserved area are inactive for the current run. Do not reserve, mark, or QA that brand area.
 
-The image model MUST NOT draw logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step. If the user requests model-drawn branding, decline that part and offer the deterministic overlay path.
+The image model MUST NOT draw logos, brand names, watermarks, page-number badges, placeholder frames, reserve boxes, or other fixed brand components. Those are either omitted or added after generation by a deterministic overlay step. If the user requests model-drawn branding, decline that part and offer the deterministic overlay path.
 
 Generation backend selection is separate from visual style selection. Treat an explicit user statement that the current environment has a configured API image backend as authoritative intake context. Do not redirect that user to public API-key setup, do not infer an official endpoint from an `openai`-like provider label, and do not treat a missing shell environment variable as proof that no backend exists. Resolve and verify the active backend using `references/generation-backends.md`.
 
@@ -200,12 +200,13 @@ Exit when `AnalysisSummary.main_line`, `core_claim`, `audience_value`, `expressi
 3. If no style is specified, select the best registered `style_id` for `platform` and `AnalysisSummary.expression_need`. If none exists, stop as `BLOCKER: no registered platform style`; never borrow another platform's style.
 4. Read the selected `style_file` completely.
 5. Read the selected `style_spec` before building the shot list. If `style_file` or `style_spec` is missing or unreadable, stop before Section 4 and report the missing path.
-6. Read `style_spec.brandPolicy`. Missing policy means `{ defaultEnabled: true, userOverrideAllowed: true }` for backward compatibility.
+6. Read `style_spec.brandPolicy`. Missing policy means `{ defaultEnabled: false, userOverrideAllowed: true }` for compatibility.
 7. Validate that the selected `style_spec` defines an enabled top-right `brandSlot`. If it does not, stop as `BLOCKER: required production brand slot unavailable`.
 8. Run `node scripts/resolve-brand-policy.mjs --style-spec <selected_style_bundle.style_spec> --override <brand_override-or-null>` and set `{ brand_enabled, brand_policy_default_enabled, brand_override, brand_policy_source }` from its output.
 9. Set `selected_style_bundle = { style_id, platform, style_file, style_spec, style_reference?, brand_policy, brand_slot_enabled }`.
-10. Happy path order is: select and read `style_file`/`style_spec` -> validate the brand slot -> resolve `brand_enabled` -> verify the raster renderer only when branding is enabled.
-11. When branding is enabled, require Node.js 22+ and readable `vendor/resvg-wasm/index.js` plus `vendor/resvg-wasm/index_bg.wasm`. The overlay loads and checksum-verifies vendored `@resvg/resvg-wasm@2.6.2` in-process; do not run `npm install`, install a native SVG renderer, or request an API key. Use `node scripts/apply-brand-overlay.mjs --self-test` only for release/package diagnostics. If unavailable, stop as `BLOCKER: required brand overlay unavailable`. When branding is disabled, do not require or invoke this renderer.
+10. Happy path order is: select and read `style_file`/`style_spec` -> validate the brand slot -> resolve `brand_enabled` -> preflight the configured asset and raster renderer only when branding is enabled.
+11. In standalone mode, when branding is enabled, run `node scripts/apply-brand-overlay.mjs --validate-only --brand-config brand-overlay.config.json` from the skill root before Section 4 and before submitting any generation request. This verifies the config, path, hash, safe SVG subset, vendored renderer, and visible rendered pixels without creating an image. The default `asset: null` and every failed canary are `BLOCKER: required brand asset unavailable`; do not generate first and discover the blocker afterward. Provider mode performs the same fail-fast check through `provider-contract.mjs validate-request`.
+12. When branding is enabled, require Node.js 22+ and readable `vendor/resvg-wasm/index.js` plus `vendor/resvg-wasm/index_bg.wasm`. The overlay loads and checksum-verifies vendored `@resvg/resvg-wasm@2.6.2` in-process; do not run `npm install`, install a native SVG renderer, or request an API key. Use `node scripts/apply-brand-overlay.mjs --self-test` only for release/package diagnostics. If unavailable, stop as `BLOCKER: required brand overlay unavailable`. When branding is disabled, do not require or invoke this renderer.
 
 Rules:
 - Otherwise choose the best platform style based on content type and expression need.
@@ -300,7 +301,7 @@ Save each final single-image prompt under `prompts/`, for example `prompts/01-co
 
 If a style file contains batch language such as "generate the whole set", MUST treat it as planning guidance only. MUST compile and generate one image at a time.
 
-The prompt MUST explicitly forbid model-drawn logos, `TF`, `Tranfu`, watermarks, page-number badges, placeholder frames, reserve boxes, and visible brand-slot markers. When Brand Plugin is enabled, ask the model to keep the selected `style_spec` brand slot free of important content so the real brand asset can be overlaid after generation. MUST NOT ask the model to visibly "reserve" or "mark" the slot.
+The prompt MUST explicitly forbid model-drawn logos, brand names, watermarks, page-number badges, placeholder frames, reserve boxes, and visible brand-slot markers. When Brand Plugin is enabled, ask the model to keep the selected `style_spec` brand slot free of important content so the configured brand asset can be overlaid after generation. MUST NOT ask the model to visibly "reserve" or "mark" the slot.
 
 Use the complete single-image template and good/bad examples in `references/prompt-compiler.md`; do not duplicate them here.
 
@@ -370,7 +371,7 @@ PROJECT_OUTPUT_DIR="$(cd <project-output-dir> && pwd)"
 cd <skill-root>
 node scripts/apply-brand-overlay.mjs \
   --style-spec <selected_style_bundle.style_spec> \
-  --brand-svg assets/brand/tranfu-logo-reference.svg \
+  --brand-config brand-overlay.config.json \
   --input <absolute-source-path> \
   --output <absolute-final-path>
 ```
@@ -391,7 +392,7 @@ If an image fails, identify the reason before retrying:
 - Too many ideas: split or remove anchors.
 - Style drift: inspect the `style_reference`, ignore its semantic content, then strengthen selected style source and negative constraints.
 - Weak metaphor: rewrite physical action and object.
-- Brand or placeholder frame was drawn by the model: regenerate with stronger "no logo/no TF/no Tranfu/no placeholder frame/no reserve box" constraints, then apply the Brand Plugin overlay only when `brand_enabled` is true.
+- Brand or placeholder frame was drawn by the model: regenerate with stronger "no logo/no brand name/no watermark/no placeholder frame/no reserve box" constraints, then apply the Brand Plugin overlay only when `brand_enabled` is true.
 - Brand overlay blocks content: use the selected `style_spec` brand slot; if content occupies that slot, regenerate with a clearer unmarked area.
 - Existing content must not change but a brand-slot artifact exists: avoid full-image regeneration; restore the original unbranded image and remove only the local artifact with same-image texture, then reapply the overlay only when `brand_enabled` is true.
 - Layout too empty or crowded: adjust structure, not the whole style.
@@ -411,11 +412,11 @@ post_illustration_bundle:
   style_file: references/styles/xhs-style-cream-paper.md
   style_spec: references/styles/xhs-style-cream-paper.spec.json
   style_reference: assets/style-references/xhs-cream-paper.png
-  brand_plugin_enabled: true
-  brand_policy_default_enabled: true
+  brand_plugin_enabled: false
+  brand_policy_default_enabled: false
   brand_override: null
   brand_policy_source: style-default
-  brand_overlay_renderer: resvg-wasm@2.6.2
+  brand_overlay_renderer: null
   generation_backend:
     kind: configured-api
     adapter: runtime-configured-adapter
@@ -442,8 +443,7 @@ post_illustration_bundle:
   shot_list_path: shot-list.md
   images:
     - image_id: 01-cover
-      file: images/branded/01-cover.png
-      source_file: images/unbranded/01-cover.png
+      file: images/01-cover.png
       prompt_path: prompts/01-cover.md
       placement: 01-cover
       core_meaning: "A clear anchor prevents decorative filler."
@@ -451,9 +451,9 @@ post_illustration_bundle:
       visual_metaphor: "A messy note stack becomes one labeled storyboard frame."
       content_qa_status: pass
       style_qa_status: pass
-      brand_qa_status: pass
+      brand_qa_status: disabled-by-style-default
       set_qa_status: pass
-      brand_overlay_status: applied
+      brand_overlay_status: disabled-by-style-default
       size_check_status: pass-native
       generation_attempt: 1
       requested_dimensions: "1152x1536"
@@ -463,7 +463,7 @@ post_illustration_bundle:
       delivery_dimensions: "<same-as-source>"
       delivery_artifact: { format: png, bytes: "<actual-delivery-bytes>", hard_limit_exporter: null }
       native_output_preserved: true
-      post_generation_actions: [brand-overlay-native]
+      post_generation_actions: []
       geometry_attempts:
         - { attempt: 1, requested_dimensions: "1152x1536", source_dimensions: "<actual>", status: pass-native }
       source_note: generation candidate 1
@@ -483,6 +483,7 @@ Final response must include:
 - Missing source content: return to Section 1 and ask for the article/note/post.
 - Unknown or unreadable `style_id`, `style_file`, or required `style_spec`, or no registered style for the platform: stop before Section 4 and list candidates or state that none is registered.
 - Missing, invalid, duplicate, or internally inconsistent style registry: stop as `BLOCKER: style registry invalid`.
+- Brand config is unset, unsafe, stale, or renders no visible pixels: stop before generation as `BLOCKER: required brand asset unavailable` only when branding is enabled.
 - Node.js 22+, vendored resvg WASM, or a PNG source is unavailable: stop as `BLOCKER: required brand overlay unavailable` or `BLOCKER: brand overlay input format unavailable` only when branding is enabled.
 - Selected production Style Spec lacks an enabled top-right `brandSlot`: stop as `BLOCKER: required production brand slot unavailable`.
 - Generation backend preflight failure: stop with the exact blocker code from `references/generation-backends.md`; do not report a generic native-tool failure when a configured API backend was asserted.
@@ -506,9 +507,9 @@ Final response must include:
 - MUST NOT treat missing shell variables as proof that configured credentials are absent or assume child processes inherit tools, endpoints, credentials, or image-generation capability.
 - MUST resolve built-in style request dimensions from the verified `gpt-image-2` geometry profile without asking the user to confirm sizes.
 - MUST treat the suite-level `style_spec` as authority for platform appearance, target ratio, design-coordinate geometry, colors, layout, safe areas, and fixed component slots.
-- MUST resolve Brand Plugin enablement from explicit user override, then Style Spec default, then legacy default `true`; Visual Builder styles allow explicit overrides.
+- MUST resolve Brand Plugin enablement from explicit user override, then Style Spec default, then compatibility default `false`; Visual Builder styles allow explicit overrides.
 - MUST require every production `style_spec` to define an enabled top-right `brandSlot`.
-- MUST ignore Style Reference watermark state for production branding and apply the real brand SVG overlay before delivery when branding is enabled.
+- MUST ignore Style Reference watermark state for production branding and apply the configured brand SVG overlay before delivery when branding is enabled.
 - MUST NOT let Brand Plugin define the visual system or let the image model draw brand logos, page-number badges, placeholder frames, reserve boxes, or visible brand-slot markers.
 - MUST generate and QA one image at a time.
 - MUST record requested, actual source, and delivery geometry; permit same-dimension format/byte adaptation only for a known publishing path through a verified exporter, otherwise block; reject sources outside ratio tolerance without resizing, cropping, padding, rotating, stretching, or upscaling.

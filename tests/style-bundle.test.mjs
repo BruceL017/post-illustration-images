@@ -160,7 +160,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
       aliases: [`${id} alias`],
       ...(makeDefault === undefined ? {} : { makeDefault }),
       brandPolicy: {
-        defaultEnabled: true,
+        defaultEnabled: false,
         userOverrideAllowed: true
       }
     },
@@ -211,7 +211,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
     fixedComponents: {
       brandSlot: { enabled: true, anchor: "top-right", ...fixture.brandSlot, assetFit: "contain" }
     },
-    brandPolicy: { defaultEnabled: true, userOverrideAllowed: true },
+    brandPolicy: { defaultEnabled: false, userOverrideAllowed: true },
     inputHandling: fixture.inputHandling ?? {
       preserveNativeOutput: true,
       ratioTolerance: 0.002,
@@ -325,6 +325,18 @@ test("valid approved bundle passes", (t) => {
   const bundleDir = createBundle(t);
   const result = validateStyleBundle({ bundleDir, skillRoot });
   assert.equal(result.candidate.style.id, "xhs-test-template");
+});
+
+test("candidate branding must remain disabled by default", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t);
+  mutateJson(resolve(bundleDir, "candidate.json"), (candidate) => {
+    candidate.style.brandPolicy.defaultEnabled = true;
+  });
+  mutateJson(resolve(bundleDir, "style.spec.json"), (spec) => {
+    spec.brandPolicy.defaultEnabled = true;
+  });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /brandPolicy\.defaultEnabled must be false/);
 });
 
 test("valid XHS bundle preserves native 1086x1448 calibration output", (t) => {

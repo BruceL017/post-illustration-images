@@ -84,7 +84,7 @@ export function renderStyleIndex(registry) {
     "- Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, component slots, and brand defaults.",
     "- Style Spec canvas dimensions are design-coordinate geometry for target ratio and layout. Accepted model output pixels are preserved for delivery; request dimensions come from the verified generation geometry profile.",
     "- Style reference images are QA baselines only. They are never generation inputs and their semantic content must not be copied.",
-    "- Brand resolution is: explicit user choice, then `brandPolicy.defaultEnabled`, then compatibility default `true` for an older spec without `brandPolicy`.",
+    "- Brand resolution is: explicit user choice, then `brandPolicy.defaultEnabled`, then compatibility default `false` for an older spec without `brandPolicy`.",
     "- When branding resolves disabled, the brand area is not an active reservation, although every production spec retains valid top-right brand geometry.",
     "",
     "| Style ID | Platform | Style File | Machine Spec | Style Reference | Brand Plugin | Page Badges | Default Use |",

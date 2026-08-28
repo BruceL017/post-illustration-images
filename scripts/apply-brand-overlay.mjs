@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import {
   mkdir,
   lstat,
@@ -16,12 +16,21 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const skillRoot = resolve(scriptDir, "..");
 const require = createRequire(import.meta.url);
+
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
 
 const resvgVersion = "2.6.2";
 const vendorIndexPath = resolve(skillRoot, "vendor/resvg-wasm/index.js");
@@ -31,8 +40,7 @@ const vendorHashes = Object.freeze({
   [vendorWasmPath]: "22bf6e9f9a100d972da0411a69c5ba504367fc1fa87b3b64e3f35e53926d2d70"
 });
 
-const defaultStyleSpec = "references/styles/xhs-style-explainer-notebook.spec.json";
-const defaultBrandSvg = "assets/brand/tranfu-logo-reference.svg";
+const defaultBrandConfigPath = resolve(skillRoot, "brand-overlay.config.json");
 const maxInputBytes = 30 * 1024 * 1024;
 const maxRasterEdge = 4096;
 const maxRasterPixels = 10_000_000;
@@ -44,22 +52,26 @@ const valueOptions = new Set([
   "input-dir",
   "output-dir",
   "style-spec",
-  "brand-svg"
+  "brand-svg",
+  "brand-config"
 ]);
-const booleanOptions = new Set(["self-test"]);
+const booleanOptions = new Set(["self-test", "validate-only"]);
 
 let wasmInitialization;
 let Resvg;
 
 function usage() {
   console.error(`Usage:
-  node scripts/apply-brand-overlay.mjs --input image.png --output image-branded.png
-  node scripts/apply-brand-overlay.mjs --input-dir unbranded --output-dir branded
+  node scripts/apply-brand-overlay.mjs --style-spec style.spec.json --brand-svg logo.svg --input image.png --output image-branded.png
+  node scripts/apply-brand-overlay.mjs --style-spec style.spec.json --brand-config brand-overlay.config.json --input-dir unbranded --output-dir branded
+  node scripts/apply-brand-overlay.mjs --validate-only --brand-config brand-overlay.config.json
   node scripts/apply-brand-overlay.mjs --self-test
 
 Options:
-  --style-spec <path>   Defaults to ${defaultStyleSpec}
-  --brand-svg <path>    Defaults to ${defaultBrandSvg}
+  --style-spec <path>   Required outside --self-test and --validate-only
+  --brand-svg <path>    Use this SVG directly
+  --brand-config <path> Load a skill-relative SVG and SHA-256 from this config
+  --validate-only       Validate and render-canary the asset without reading or writing images
 `);
 }
 
@@ -118,10 +130,6 @@ function resolveInputPath(pathValue) {
 function resolveOutputPath(pathValue) {
   if (!pathValue) return null;
   return isAbsolute(pathValue) ? pathValue : resolve(process.cwd(), pathValue);
-}
-
-function defaultPath(relativePath) {
-  return resolve(skillRoot, relativePath);
 }
 
 function sha256(buffer) {
@@ -345,12 +353,37 @@ function parseBrandSvg(svgText, svgPath) {
 
   const attributes = root[1];
   const body = root[2];
-  const viewBoxMatch = attributes.match(/\bviewBox\s*=\s*["']([^"']+)["']/i);
-  if (!viewBoxMatch) {
+  const rootAttributes = new Map();
+  const attributePattern = /\s+([a-z_:][a-z0-9_.:-]*)\s*=\s*(["'])([\s\S]*?)\2/gi;
+  let attributeCursor = 0;
+  for (const match of attributes.matchAll(attributePattern)) {
+    if (attributes.slice(attributeCursor, match.index).trim()) {
+      throw new Error(`${svgPath} has malformed SVG root attributes`);
+    }
+    const name = match[1].toLowerCase();
+    if (rootAttributes.has(name)) {
+      throw new Error(`${svgPath} has duplicate SVG root attribute ${match[1]}`);
+    }
+    rootAttributes.set(name, match[3]);
+    attributeCursor = match.index + match[0].length;
+  }
+  if (attributes.slice(attributeCursor).trim()) {
+    throw new Error(`${svgPath} has malformed SVG root attributes`);
+  }
+  const allowedRootAttributes = new Set(["xmlns", "viewbox", "width", "height", "version"]);
+  const unsupportedRootAttribute = [...rootAttributes.keys()].find((name) => !allowedRootAttributes.has(name));
+  if (unsupportedRootAttribute) {
+    throw new Error(
+      `${svgPath} has unsupported SVG root attribute ${unsupportedRootAttribute}; put visual properties on g or path elements`
+    );
+  }
+
+  const viewBoxValue = rootAttributes.get("viewbox");
+  if (!viewBoxValue) {
     throw new Error(`${svgPath} must define a viewBox`);
   }
 
-  const viewBox = viewBoxMatch[1].trim().split(/[\s,]+/).map(Number);
+  const viewBox = viewBoxValue.trim().split(/[\s,]+/).map(Number);
   if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value)) || viewBox[2] <= 0 || viewBox[3] <= 0) {
     throw new Error(`${svgPath} has an invalid viewBox`);
   }
@@ -364,13 +397,137 @@ function parseBrandSvg(svgText, svgPath) {
   if (paths.length === 0) {
     throw new Error(`${svgPath} contains no path elements`);
   }
-  for (const path of paths) {
-    if (!/\bfill\s*=\s*["']#E63A46["']/i.test(path[1])) {
-      throw new Error(`${svgPath} paths must use the fixed #E63A46 brand color`);
-    }
-  }
 
   return { viewBox: viewBox.join(" "), body };
+}
+
+function exactKeys(value, expected) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === expected.length
+    && expected.every((key) => Object.hasOwn(value, key));
+}
+
+function inside(root, target) {
+  const relativePath = relative(root, target);
+  return relativePath === "" || (!isAbsolute(relativePath) && relativePath !== ".."
+    && !relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`));
+}
+
+async function hasSymlinkComponent(root, target) {
+  if (!inside(root, target)) return true;
+  let current = root;
+  const parts = relative(root, target).split(/[\\/]/).filter(Boolean);
+  for (const part of parts) {
+    current = join(current, part);
+    const info = await lstat(current);
+    if (info.isSymbolicLink()) return true;
+  }
+  return false;
+}
+
+async function validateBrandVisibility(brand, svgPath) {
+  const Renderer = await ensureResvg();
+  let pixels;
+  try {
+    pixels = renderSvg(
+      Renderer,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="${brand.viewBox}">${brand.body}</svg>`,
+      true
+    ).pixels;
+  } catch (error) {
+    throw new Error(`Brand asset visibility canary failed: ${svgPath}: ${error.message}`);
+  }
+  let visiblePixels = 0;
+  let coveredPixels = 0;
+  let cumulativeAlpha = 0;
+  for (let offset = 3; offset < pixels.length; offset += 4) {
+    const alpha = pixels[offset];
+    if (alpha > 0) visiblePixels += 1;
+    if (alpha >= 16) coveredPixels += 1;
+    cumulativeAlpha += alpha;
+  }
+  if (visiblePixels === 0) {
+    throw new Error(`Brand asset has no visible pixels after rendering: ${svgPath}`);
+  }
+  if (coveredPixels < 16 || cumulativeAlpha < 2048) {
+    throw new Error(
+      `Brand asset has insufficient visible coverage after rendering: ${svgPath} `
+      + `(covered_pixels=${coveredPixels}, cumulative_alpha=${cumulativeAlpha})`
+    );
+  }
+  return brand;
+}
+
+async function readBrandSvg(svgPath) {
+  const info = await lstat(svgPath);
+  if (info.isSymbolicLink() || !info.isFile()) {
+    throw new Error(`Brand asset must be a real regular SVG file: ${svgPath}`);
+  }
+  const brand = parseBrandSvg(await readFile(svgPath, "utf8"), svgPath);
+  return validateBrandVisibility(brand, svgPath);
+}
+
+export async function loadConfiguredBrandAsset(
+  configPath = defaultBrandConfigPath,
+  root = skillRoot
+) {
+  let configInfo;
+  try {
+    configInfo = await lstat(configPath);
+  } catch (error) {
+    throw new Error(`Brand config is unavailable: ${configPath}: ${error.message}`);
+  }
+  if (configInfo.isSymbolicLink() || !configInfo.isFile()) {
+    throw new Error(`Brand config must be a real regular file: ${configPath}`);
+  }
+
+  let config;
+  try {
+    config = JSON.parse(await readFile(configPath, "utf8"));
+  } catch (error) {
+    throw new Error(`Brand config is invalid: ${configPath}: ${error.message}`);
+  }
+  if (!exactKeys(config, ["schema_version", "asset"]) || config.schema_version !== 1) {
+    throw new Error("Brand config must contain exactly schema_version: 1 and asset");
+  }
+  if (config.asset === null) {
+    throw new Error("Brand asset is not configured");
+  }
+  if (!exactKeys(config.asset, ["path", "sha256"])
+    || typeof config.asset.path !== "string" || !config.asset.path
+    || isAbsolute(config.asset.path) || config.asset.path.includes("\\")
+    || !/^[a-f0-9]{64}$/.test(config.asset.sha256 || "")) {
+    throw new Error("Brand config asset must contain a safe skill-relative path and lowercase SHA-256");
+  }
+
+  const resolvedRoot = resolve(root);
+  const assetPath = resolve(resolvedRoot, config.asset.path);
+  if (!inside(resolvedRoot, assetPath) || !config.asset.path.toLowerCase().endsWith(".svg")) {
+    throw new Error("Configured brand asset must be an SVG inside the skill root");
+  }
+  let assetInfo;
+  try {
+    assetInfo = await lstat(assetPath);
+  } catch (error) {
+    throw new Error(`Configured brand asset is unavailable: ${config.asset.path}: ${error.message}`);
+  }
+  if (assetInfo.isSymbolicLink() || !assetInfo.isFile()
+    || await hasSymlinkComponent(resolvedRoot, assetPath)
+    || !inside(await realpath(resolvedRoot), await realpath(assetPath))) {
+    throw new Error(`Configured brand asset must be a real file inside the skill root: ${config.asset.path}`);
+  }
+
+  const bytes = await readFile(assetPath);
+  if (sha256(bytes) !== config.asset.sha256) {
+    throw new Error(`Configured brand asset SHA-256 mismatch: ${config.asset.path}`);
+  }
+  const brand = parseBrandSvg(bytes.toString("utf8"), assetPath);
+  await validateBrandVisibility(brand, assetPath);
+  return {
+    path: assetPath,
+    sha256: config.asset.sha256,
+    brand
+  };
 }
 
 function aspectRatioMatches(size, canvas, tolerance) {
@@ -532,7 +689,7 @@ async function renderOne({ input, output, spec, specPath, brand, capturePixels =
 function countSelfTestPixels(branded, plain, canvas, slot) {
   let changedInside = 0;
   let changedOutside = 0;
-  let exactBrandRed = 0;
+  const colors = new Set();
 
   for (let y = 0; y < canvas.height; y += 1) {
     for (let x = 0; x < canvas.width; x += 1) {
@@ -543,21 +700,16 @@ function countSelfTestPixels(branded, plain, canvas, slot) {
       if (inside) changedInside += 1;
       else changedOutside += 1;
 
-      if (
-        branded[offset] === 0xe6 &&
-        branded[offset + 1] === 0x3a &&
-        branded[offset + 2] === 0x46 &&
-        branded[offset + 3] === 0xff
-      ) {
-        exactBrandRed += 1;
+      if (branded[offset + 3] === 0xff) {
+        colors.add(branded.subarray(offset, offset + 3).toString("hex"));
       }
     }
   }
 
-  return { changedInside, changedOutside, exactBrandRed };
+  return { changedInside, changedOutside, distinctOpaqueColors: colors.size };
 }
 
-async function runSelfTest(brandSvgPath) {
+async function runSelfTest() {
   const Renderer = await ensureResvg();
   const tempDir = await mkdtemp(join(tmpdir(), "brand-overlay-self-test-"));
   const input = join(tempDir, "input.png");
@@ -596,7 +748,10 @@ async function runSelfTest(brandSvgPath) {
     ).png;
     await writeFile(input, background);
 
-    const brand = parseBrandSvg(await readFile(brandSvgPath, "utf8"), brandSvgPath);
+    const brand = parseBrandSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 28"><path fill="#F2C14E" d="M5 4h40v20H5z"/><path fill="#4D7CFE" d="M55 4h40v20H55z"/></svg>`,
+      "internal:self-test-asset"
+    );
     const plain = await renderOne({
       input,
       output: plainOutput,
@@ -620,14 +775,14 @@ async function runSelfTest(brandSvgPath) {
       spec.canvas,
       spec.fixedComponents.brandSlot
     );
-    if (counts.changedInside < 20 || counts.exactBrandRed < 10 || counts.changedOutside !== 0) {
+    if (counts.changedInside < 20 || counts.distinctOpaqueColors < 2 || counts.changedOutside !== 0) {
       throw new Error(
-        `Self-test Logo pixel check failed: ${JSON.stringify(counts)}`
+        `Self-test asset pixel check failed: ${JSON.stringify(counts)}`
       );
     }
 
     console.log(
-      `Brand overlay self-test passed: vendored resvg WASM ${resvgVersion} produced a visible fixed-color Logo.`
+      `Brand overlay self-test passed: vendored resvg WASM ${resvgVersion} produced a visible multicolor asset inside the slot.`
     );
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -645,20 +800,39 @@ async function readStyleSpec(styleSpecPath) {
 async function main() {
   ensureSupportedNode();
   const args = parseArgs(process.argv.slice(2));
-  const styleSpecPath = args["style-spec"]
-    ? resolveInputPath(args["style-spec"])
-    : defaultPath(defaultStyleSpec);
-  const brandSvgPath = args["brand-svg"]
-    ? resolveInputPath(args["brand-svg"])
-    : defaultPath(defaultBrandSvg);
 
   if (args["self-test"]) {
-    if (args.input || args.output || args["input-dir"] || args["output-dir"]) {
-      throw new Error("--self-test cannot be combined with input or output options");
+    if (Object.keys(args).length !== 1) {
+      throw new Error("--self-test cannot be combined with other options");
     }
-    await runSelfTest(brandSvgPath);
+    await runSelfTest();
     return;
   }
+
+  const hasBrandSvg = Boolean(args["brand-svg"]);
+  const hasBrandConfig = Boolean(args["brand-config"]);
+  if (hasBrandSvg === hasBrandConfig) {
+    throw new Error("Provide exactly one of --brand-svg or --brand-config");
+  }
+
+  const loadBrand = () => hasBrandSvg
+    ? readBrandSvg(resolveInputPath(args["brand-svg"]))
+    : loadConfiguredBrandAsset(resolveInputPath(args["brand-config"])).then((result) => result.brand);
+
+  if (args["validate-only"]) {
+    if (Object.keys(args).some((key) => !["validate-only", "brand-svg", "brand-config"].includes(key))) {
+      throw new Error("--validate-only cannot be combined with style, input, or output options");
+    }
+    await loadBrand();
+    console.log("Brand asset validation passed: the configured SVG rendered visible pixels.");
+    return;
+  }
+
+  if (!args["style-spec"]) {
+    throw new Error("--style-spec is required outside --self-test and --validate-only");
+  }
+
+  const styleSpecPath = resolveInputPath(args["style-spec"]);
 
   const hasFileMode = args.input || args.output;
   const hasDirectoryMode = args["input-dir"] || args["output-dir"];
@@ -672,7 +846,7 @@ async function main() {
   }
 
   const spec = await readStyleSpec(styleSpecPath);
-  const brand = parseBrandSvg(await readFile(brandSvgPath, "utf8"), brandSvgPath);
+  const brand = await loadBrand();
 
   if (hasFileMode) {
     if (!args.input || !args.output) {
@@ -719,7 +893,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (isMainModule()) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

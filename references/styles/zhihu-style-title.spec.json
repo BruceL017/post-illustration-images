@@ -15,8 +15,7 @@
     "ink.gray": "#5F6873",
     "card.white": "#FFFFFF",
     "line.gray": "#CBD3DC",
-    "accent.orangeRed": "#F0564A",
-    "brand.red": "#E63A46"
+    "accent.orangeRed": "#F0564A"
   },
   "layout": {
     "contentSafeArea": {
@@ -45,7 +44,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {

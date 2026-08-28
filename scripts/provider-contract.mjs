@@ -5,10 +5,14 @@ import { existsSync } from "node:fs";
 import { lstat, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inflateSync } from "node:zlib";
+
+import { loadConfiguredBrandAsset } from "./apply-brand-overlay.mjs";
 
 const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONTRACT = "content-production-provider/v1";
 const PROVIDER = "illustration-v1";
+const BRAND_CONFIG = join(SKILL_ROOT, "brand-overlay.config.json");
 const PLATFORMS = new Set(["wechat", "xiaohongshu", "zhihu", "weibo", "toutiao"]);
 const VARIANTS = new Set(["A", "B"]);
 const keys = (value) => value.split(" ");
@@ -76,6 +80,14 @@ function add(issues, code, message, extra = {}) {
 
 async function sha256(path) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
+}
+
+async function validateProviderBrandAsset(issues) {
+  try {
+    await loadConfiguredBrandAsset(BRAND_CONFIG, SKILL_ROOT);
+  } catch (error) {
+    add(issues, "required_brand_asset_unavailable", error.message);
+  }
 }
 
 async function hasSymlinkComponent(root, path, includeLeaf = true) {
@@ -256,6 +268,9 @@ async function validateRequest(input) {
     || context.spec && context.requestPath !== resolve(context.runDir, context.spec.request)) {
     add(context.issues, "invalid_provider_request", "Request does not match illustration-v1.");
   }
+  if (request.options?.brand_override === "enabled") {
+    await validateProviderBrandAsset(context.issues);
+  }
 
   const roles = request.mode === "plan"
     ? ["final_draft", "title_selection"]
@@ -387,7 +402,7 @@ async function registryStyle(plan, issues) {
 }
 
 function expectedBrand(request, styleSpec) {
-  const policyDefault = styleSpec.brandPolicy?.defaultEnabled ?? true;
+  const policyDefault = styleSpec.brandPolicy?.defaultEnabled ?? false;
   const override = request.options.brand_override;
   const enabled = override === "enabled" ? true : override === "disabled" ? false : policyDefault;
   return {
@@ -467,7 +482,7 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
       add(issues, "invalid_illustration_plan", error.message);
     }
   }
-  if (!plan) return { issues, plan: null, planPath, shotPath };
+  if (!plan) return { issues, plan: null, planPath, shotPath, styleSpec: null };
   if (!sameKeys(plan, PLAN_KEYS) || plan.schema_version !== 1 || plan.task_id !== expectedTask
     || plan.status !== "READY" || plan.platform !== context.request.platform
     || plan.provider_platform !== context.request.provider_platform || plan.variant !== context.request.variant
@@ -486,6 +501,7 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
     add(issues, "invalid_illustration_plan", "Plan style, brand, backend, or geometry schema is invalid.");
   }
   const registered = await registryStyle(plan, issues);
+  const styleSpec = registered?.spec ?? null;
   if (registered) {
     if (context.request.options.style_id !== null && context.request.options.style_id !== registered.entry.id) {
       add(issues, "invalid_illustration_style", "Selected style does not match options.style_id.");
@@ -495,6 +511,7 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
     if (plan.brand.enabled && plan.generation_backend.artifact_format !== "png") {
       add(issues, "invalid_illustration_brand", "Brand-enabled generation requires PNG source artifacts.");
     }
+    if (plan.brand.enabled) await validateProviderBrandAsset(issues);
     const geometry = await expectedGeometry(registered.spec);
     if (!sameJson(plan.generation_geometry, geometry)) {
       add(issues, "invalid_illustration_geometry", "Generation geometry does not match the registered Style Spec.");
@@ -545,13 +562,162 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
   if (rejectGenerated && (await currentGeneratedFiles(context)).length) {
     add(issues, "plan_contains_generated_assets", "Plan mode cannot create current-attempt prompts or images.");
   }
-  return { issues, plan, planPath, shotPath };
+  return { issues, plan, planPath, shotPath, styleSpec };
 }
 
 function parsePng(buffer) {
   if (buffer.length < 24 || buffer.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
     || buffer.subarray(12, 16).toString("ascii") !== "IHDR") return null;
   return { format: "png", width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+function paeth(left, up, upperLeft) {
+  const estimate = left + up - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
+  if (upDistance <= upperLeftDistance) return up;
+  return upperLeft;
+}
+
+function decodePngRgba(buffer) {
+  if (buffer.length < 33 || buffer.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
+    throw new Error("not a PNG");
+  }
+  let offset = 8;
+  let header = null;
+  let palette = null;
+  let transparency = null;
+  let sawEnd = false;
+  const compressed = [];
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    if (dataEnd + 4 > buffer.length) throw new Error(`truncated ${type || "PNG"} chunk`);
+    const data = buffer.subarray(dataStart, dataEnd);
+    if (type === "IHDR") {
+      if (header || data.length !== 13) throw new Error("invalid PNG IHDR");
+      header = Buffer.from(data);
+    } else if (type === "PLTE") {
+      palette = Buffer.from(data);
+    } else if (type === "tRNS") {
+      transparency = Buffer.from(data);
+    } else if (type === "IDAT") {
+      compressed.push(data);
+    } else if (type === "IEND") {
+      sawEnd = true;
+      break;
+    }
+    offset = dataEnd + 4;
+  }
+  if (!header || !sawEnd || compressed.length === 0) throw new Error("incomplete PNG structure");
+
+  const width = header.readUInt32BE(0);
+  const height = header.readUInt32BE(4);
+  const bitDepth = header[8];
+  const colorType = header[9];
+  const interlace = header[12];
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0
+    || width > 4096 || height > 4096 || width * height > 10_000_000) {
+    throw new Error("unsafe PNG dimensions");
+  }
+  if (bitDepth !== 8 || ![0, 2, 3, 4, 6].includes(colorType) || interlace !== 0) {
+    throw new Error("unsupported PNG pixel encoding");
+  }
+  if (colorType === 3 && (!palette || palette.length === 0 || palette.length % 3 !== 0
+    || palette.length > 768 || transparency && transparency.length > palette.length / 3)) {
+    throw new Error("invalid PNG palette");
+  }
+
+  const bytesPerPixel = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 })[colorType];
+  const stride = width * bytesPerPixel;
+  const expectedLength = (stride + 1) * height;
+  const inflated = inflateSync(Buffer.concat(compressed), { maxOutputLength: expectedLength });
+  if (inflated.length !== expectedLength) throw new Error("unexpected PNG pixel data length");
+
+  const pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const sourceRow = y * (stride + 1);
+    const targetRow = y * stride;
+    const filter = inflated[sourceRow];
+    for (let x = 0; x < stride; x += 1) {
+      const encoded = inflated[sourceRow + 1 + x];
+      const left = x >= bytesPerPixel ? pixels[targetRow + x - bytesPerPixel] : 0;
+      const up = y > 0 ? pixels[targetRow - stride + x] : 0;
+      const upperLeft = y > 0 && x >= bytesPerPixel
+        ? pixels[targetRow - stride + x - bytesPerPixel] : 0;
+      let predictor;
+      if (filter === 0) predictor = 0;
+      else if (filter === 1) predictor = left;
+      else if (filter === 2) predictor = up;
+      else if (filter === 3) predictor = Math.floor((left + up) / 2);
+      else if (filter === 4) predictor = paeth(left, up, upperLeft);
+      else throw new Error(`unsupported PNG filter ${filter}`);
+      pixels[targetRow + x] = (encoded + predictor) & 0xff;
+    }
+  }
+
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const source = pixel * bytesPerPixel;
+    const target = pixel * 4;
+    if (colorType === 0) {
+      rgba[target] = pixels[source];
+      rgba[target + 1] = pixels[source];
+      rgba[target + 2] = pixels[source];
+      rgba[target + 3] = 255;
+    } else if (colorType === 2) {
+      pixels.copy(rgba, target, source, source + 3);
+      rgba[target + 3] = 255;
+    } else if (colorType === 3) {
+      const index = pixels[source];
+      const paletteOffset = index * 3;
+      if (paletteOffset + 2 >= palette.length) throw new Error("PNG palette index is out of range");
+      palette.copy(rgba, target, paletteOffset, paletteOffset + 3);
+      rgba[target + 3] = transparency?.[index] ?? 255;
+    } else if (colorType === 4) {
+      rgba[target] = pixels[source];
+      rgba[target + 1] = pixels[source];
+      rgba[target + 2] = pixels[source];
+      rgba[target + 3] = pixels[source + 1];
+    } else {
+      pixels.copy(rgba, target, source, source + 4);
+    }
+  }
+  return { width, height, rgba };
+}
+
+async function brandPixelDelta(sourcePath, deliveryPath, styleSpec) {
+  const [source, delivery] = await Promise.all([
+    readFile(sourcePath).then(decodePngRgba),
+    readFile(deliveryPath).then(decodePngRgba)
+  ]);
+  if (source.width !== delivery.width || source.height !== delivery.height) {
+    throw new Error("source and delivery PNG dimensions differ");
+  }
+  const canvas = styleSpec?.canvas;
+  const slot = styleSpec?.fixedComponents?.brandSlot;
+  if (!canvas || !slot) throw new Error("registered Style Spec has no brand slot geometry");
+  const xStart = Math.max(0, Math.floor(slot.x * source.width / canvas.width));
+  const yStart = Math.max(0, Math.floor(slot.y * source.height / canvas.height));
+  const xEnd = Math.min(source.width, Math.ceil((slot.x + slot.width) * source.width / canvas.width));
+  const yEnd = Math.min(source.height, Math.ceil((slot.y + slot.height) * source.height / canvas.height));
+  let changedInside = 0;
+  let changedOutside = 0;
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      const offset = (y * source.width + x) * 4;
+      const bothTransparent = source.rgba[offset + 3] === 0 && delivery.rgba[offset + 3] === 0;
+      if (bothTransparent || source.rgba.subarray(offset, offset + 4)
+        .equals(delivery.rgba.subarray(offset, offset + 4))) continue;
+      if (x >= xStart && x < xEnd && y >= yStart && y < yEnd) changedInside += 1;
+      else changedOutside += 1;
+    }
+  }
+  return { changedInside, changedOutside };
 }
 
 function parseJpeg(buffer) {
@@ -680,6 +846,21 @@ async function validateGenerate(context, planValidation) {
     }
     if (pathSet.source && sourcePath && deliveryPath && await sha256(sourcePath) === await sha256(deliveryPath)) {
       add(issues, "invalid_illustration_brand", `Brand overlay did not change delivery bytes: ${anchor.image_id}.`);
+    }
+    if (pathSet.source && sourcePath && deliveryPath) {
+      try {
+        const delta = await brandPixelDelta(sourcePath, deliveryPath, planValidation.styleSpec);
+        if (delta.changedInside === 0 || delta.changedOutside !== 0) {
+          add(
+            issues,
+            "invalid_illustration_brand",
+            `Brand overlay pixel delta is invalid for ${anchor.image_id}: `
+              + `inside=${delta.changedInside}, outside=${delta.changedOutside}.`
+          );
+        }
+      } catch (error) {
+        add(issues, "invalid_illustration_brand", `Unable to verify brand overlay pixels for ${anchor.image_id}: ${error.message}`);
+      }
     }
     if (!pathSet.source && (image.source_file !== null || image.source_sha256 !== null)) {
       add(issues, "invalid_illustration_brand", "Brand-disabled delivery must not declare a second source file.");
