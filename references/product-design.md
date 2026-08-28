@@ -56,7 +56,7 @@ intake
    - Brand assets live in `assets/brand/`.
    - The selected Style Spec controls brand placement and size.
    - Every production Style Spec defines an enabled top-right brand slot and matching reserved area.
-   - Enablement resolves from an explicit user override, then `brandPolicy.defaultEnabled`, then legacy default `true`.
+   - Enablement resolves from an explicit user override, then `brandPolicy.defaultEnabled`, then compatibility default `false`.
    - Missing overlay capability blocks only branded delivery; disabling branding delivers the accepted model raster directly.
    - Model generation must not draw brand logos.
 
@@ -81,11 +81,11 @@ intake
 ```text
 post-illustration-images/
   SKILL.md
+  brand-overlay.config.json
   agents/
     openai.yaml
   assets/
-    brand/
-      tranfu-logo-reference.svg
+    brand/                # optional configured SVG assets; empty by default
     style-references/
       wechat-doodle.png
       xhs-cream-paper.png
@@ -192,7 +192,7 @@ To add a new visual style:
 To change brand behavior:
 
 1. Edit `references/brand.md`.
-2. Replace or add assets under `assets/brand/`.
+2. Add a generic SVG under `assets/brand/` and register its path plus SHA-256 in `brand-overlay.config.json`.
 3. Do not put platform coordinates, colors, or dimensions in `references/brand.md`.
 4. Put placement and size in the selected Style Spec.
 5. Put per-style default enablement in `brandPolicy`; keep user overrides allowed.

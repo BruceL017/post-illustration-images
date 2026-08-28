@@ -68,7 +68,7 @@ Quality requirements:
 - No realistic screenshots.
 - No stock-photo feeling.
 - No excessive decoration.
-- Do not let the image model draw a logo, TF mark, Tranfu text, watermark, brand sticker, placeholder frame, or visible brand-slot marker. Overlay the real `TF + Tranfu` SVG only when Brand Plugin resolves enabled.
+- Do not let the image model draw a logo, brand name, watermark, brand sticker, placeholder frame, or visible brand-slot marker. Overlay the configured brand SVG only when Brand Plugin resolves enabled.
 ```
 
 ## 中文版提示词
@@ -132,7 +132,7 @@ Quality requirements:
 - 不要真实截图感。
 - 不要图库照片感。
 - 装饰克制，不喧宾夺主。
-- 图像模型不生成 logo、TF、Tranfu、水印、品牌贴纸、占位框或可见槽位标记；生产图片默认在生成后叠加右上角真实 `TF + Tranfu` SVG。
+- 图像模型不生成 logo、品牌名、水印、品牌贴纸、占位框或可见槽位标记；只有用户明确启用品牌时才在生成后叠加右上角已配置品牌 SVG。
 ```
 
 ## 可复用视觉组件
@@ -207,9 +207,9 @@ brand_slot: top-right, x=872, y=64, w=148, h=40
 
 ## 品牌叠加规则
 
-- 所有生产图片默认启用 Brand Plugin；只有用户明确要求无水印、无 logo 或禁用 Tranfu 品牌时才关闭。
+- 所有生产图片默认关闭 Brand Plugin；只有用户明确要求并且存在有效品牌资产配置时才启用。
 - Brand Plugin 启用时，图像模型保持右上角品牌预留区自然干净；无论是否启用，都不得绘制、标记或模拟品牌槽位。
-- Brand Plugin 启用时，真实 `TF + Tranfu` SVG 在图像生成后叠加到 `x=872, y=64, w=148, h=40`。
+- Brand Plugin 启用时，已配置品牌 SVG 在图像生成后叠加到 `x=872, y=64, w=148, h=40`。
 - 参考图是否包含水印不影响生产规则；实际品牌状态和位置只以本风格的 Style Spec 为准。
 
 ## 禁用项
@@ -226,7 +226,7 @@ Do not use overly decorative backgrounds.
 Do not make the image dominated by one color family.
 Do not mix multiple unrelated illustration styles.
 Do not use brand-specific icons unless supplied separately as content input.
-Do not let the image model draw logos, TF, Tranfu, watermarks, brand stickers, placeholder frames, or visible brand-slot markers.
+Do not let the image model draw logos, brand names, watermarks, brand stickers, placeholder frames, or visible brand-slot markers.
 ```
 
 ## 生成前检查
@@ -242,11 +242,11 @@ Is the layout modular and spacious?
 Are decorations restrained?
 Does the image avoid realistic screenshots and stock-photo feeling?
 When branding is enabled, is the top-right brand reserved area naturally clear for the deterministic overlay?
-Is the production image scheduled to receive the real `TF + Tranfu` SVG unless the user explicitly disabled branding?
+Is the production image scheduled to receive the configured brand SVG only when the user explicitly enabled branding?
 ```
 
 ## 一句话压缩版
 
 ```text
-Warm cream-paper Xiaohongshu infographic, hand-drawn marker typography, pastel brush highlights, rounded doodle cards, thick-outline cartoon icons, subtle notebook grid texture, clean mobile-first hierarchy, spacious modular layout, friendly educational tone; when branding is enabled, keep the top-right brand slot naturally clear for the post-generation `TF + Tranfu` SVG overlay; no model-drawn logos, no photorealism, no screenshots, no dark tech style.
+Warm cream-paper Xiaohongshu infographic, hand-drawn marker typography, pastel brush highlights, rounded doodle cards, thick-outline cartoon icons, subtle notebook grid texture, clean mobile-first hierarchy, spacious modular layout, friendly educational tone; when branding is enabled, keep the top-right brand slot naturally clear for the configured post-generation SVG overlay; no model-drawn logos, no photorealism, no screenshots, no dark tech style.
 ```

@@ -16,7 +16,6 @@
     "ink.black": "#171313",
     "accent.yellow": "#FFD84A",
     "accent.red": "#F0564A",
-    "brand.red": "#E63A46",
     "accent.blueSoft": "#B9D7FF",
     "accent.greenSoft": "#BFE8A5",
     "accent.orangeSoft": "#FFC477"
@@ -54,7 +53,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {

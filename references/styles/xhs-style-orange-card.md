@@ -149,10 +149,10 @@
 
 ### 5.2.1 右上角品牌水印
 
-- 所有生产图片默认启用 Brand Plugin；只有用户明确要求无水印、无 logo 或禁用 Tranfu 品牌时才关闭。
+- 所有生产图片默认关闭 Brand Plugin；只有用户明确要求并且存在有效品牌资产配置时才启用。
 - 品牌启用时，右上角品牌预留区为 `x=842, y=44, w=208, h=90`，实际水印槽为 `x=872, y=64, w=148, h=40`。
 - 仅品牌启用时让该区域保持自然米白纸张/背景状态，不放文字、标签、圆点、卡片、图标或装饰；无论是否启用，都不能绘制占位框或槽位标记。
-- 真实 `TF + Tranfu` SVG 在图像生成后确定性叠加；参考图是否含水印不影响这条生产规则。
+- 已配置的品牌 SVG 在图像生成后确定性叠加；参考图是否含水印不影响这条生产规则。
 
 ### 5.3 副标题胶囊
 
@@ -459,7 +459,7 @@
 - 背景
 - 色彩
 - 顶部靠右、位于品牌区左侧的功能标签
-- 右上角真实品牌水印位置
+- 右上角已配置品牌水印位置
 - 圆角卡片
 - 虚线描边
 - 高亮方式
@@ -560,8 +560,8 @@ Fixed components:
 - No page number badge; keep the top-left area naturally open or lightly decorated
 - When branding is enabled, place the `Quick Guide` sticker immediately left of the brand reserved area
 - Place three small colored dots beside the Quick Guide label and, when branding is enabled, outside the brand reserved area
-- When branding is enabled, keep the top-right brand reserved area naturally clear; never draw a logo, TF mark, Tranfu text, watermark, brand sticker, placeholder frame, or visible brand-slot marker
-- After generation, overlay the real `TF + Tranfu` SVG in the top-right by default unless the user explicitly disabled branding
+- When branding is enabled, keep the top-right brand reserved area naturally clear; never draw a logo, brand name, watermark, brand sticker, placeholder frame, or visible brand-slot marker
+- After generation, overlay the configured brand SVG in the top-right only when the user explicitly enabled branding
 - Main title: [MAIN_TITLE]
 - Subtitle pill: [SUBTITLE]
 - Bottom Key Point strip with one main takeaway and one smaller supporting line
@@ -693,7 +693,7 @@ Bottom Key Point: [FINAL_TAKEAWAY]
 - 像企业 PPT 模板
 - 像网页落地页
 - 像硬核技术架构图
-- 模型生成的 logo、TF、Tranfu、水印、品牌贴纸、品牌槽占位框或可见引导标记
+- 模型生成的 logo、品牌名、水印、品牌贴纸、品牌槽占位框或可见引导标记
 
 ---
 
@@ -709,7 +709,7 @@ Bottom Key Point: [FINAL_TAKEAWAY]
 - 是否没有页码徽章、编号贴纸或分页标签？
 - 品牌启用时，顶部靠右的 Quick Guide 标签是否位于品牌区左侧且不与其重叠？
 - 品牌启用时，右上角品牌预留区是否自然干净，没有正文、标签、圆点、图标或装饰？
-- 用户未明确禁用品牌时，是否已叠加真实 `TF + Tranfu` SVG？
+- 用户明确启用品牌时，是否已叠加配置的品牌 SVG？
 - 底部 Key Point 是否统一？
 - 图标风格是否统一？
 
@@ -744,4 +744,4 @@ Bottom Key Point: [FINAL_TAKEAWAY]
 
 给任何作图 AI / Agent 的一句话版本：
 
-> 使用暖橙外框、米白撕纸网格背景、粗黑标题、橙色胶囊副标题、圆角虚线卡片、绿色/橙色信息模块、黄色高亮笔刷、统一图标贴纸、底部 Key Point 条和右下角友好表情，生成小红书知识笔记风格的竖版 3:4 系列图；品牌启用时右上角保持自然留白并在生成后叠加真实 `TF + Tranfu` SVG，Quick Guide 标签放在品牌区左侧；具体内容全部由当前主题注入，不要复用旧案例或旧文案。
+> 使用暖橙外框、米白撕纸网格背景、粗黑标题、橙色胶囊副标题、圆角虚线卡片、绿色/橙色信息模块、黄色高亮笔刷、统一图标贴纸、底部 Key Point 条和右下角友好表情，生成小红书知识笔记风格的竖版 3:4 系列图；品牌被明确启用时右上角保持自然留白并在生成后叠加已配置品牌 SVG，Quick Guide 标签放在品牌区左侧；具体内容全部由当前主题注入，不要复用旧案例或旧文案。

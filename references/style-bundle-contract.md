@@ -44,7 +44,7 @@ All paths stored in the bundle must be relative POSIX paths without `..`, backsl
     "defaultUse": "Default routing use",
     "aliases": ["example alias"],
     "brandPolicy": {
-      "defaultEnabled": true,
+      "defaultEnabled": false,
       "userOverrideAllowed": true
     }
   },
@@ -98,7 +98,7 @@ Every installed spec keeps valid top-right brand geometry even when branding def
 ```json
 {
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "fixedComponents": {
@@ -115,9 +115,9 @@ Every installed spec keeps valid top-right brand geometry even when branding def
 }
 ```
 
-`brandPolicy.defaultEnabled` may be `true` or `false`; `userOverrideAllowed` must be `true`. The slot must fit inside `layout.brandReservedArea`, which must sit in the top-right canvas quadrant. `generationConstraints.forbidModelDrawnBrand` and `keepBrandReservedAreaClear` must both be `true`.
+`brandPolicy.defaultEnabled` must be `false`; `userOverrideAllowed` must be `true`. The slot must fit inside `layout.brandReservedArea`, which must sit in the top-right canvas quadrant. `generationConstraints.forbidModelDrawnBrand` and `keepBrandReservedAreaClear` must both be `true`. The slot and reserved area stay inactive unless the runtime resolves an explicit enable override.
 
-At runtime, brand resolution is: explicit user choice, then template default, then compatibility default `true` for an older spec without `brandPolicy`. When the resolved value is false, the reserved area is not active, but its geometry remains valid.
+At runtime, brand resolution is: explicit user choice, then template default, then compatibility default `false` for an older spec without `brandPolicy`. When the resolved value is false, the reserved area is not active, but its geometry remains valid.
 
 ## QA contract
 

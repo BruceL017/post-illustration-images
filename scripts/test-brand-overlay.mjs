@@ -10,10 +10,11 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync, inflateSync } from "node:zlib";
@@ -22,8 +23,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const skillRoot = resolve(scriptDir, "..");
 const overlayScript = resolve(scriptDir, "apply-brand-overlay.mjs");
 const vendorDir = resolve(skillRoot, "vendor/resvg-wasm");
-const brandRed = [0xe6, 0x3a, 0x46, 0xff];
 const background = [0x19, 0x71, 0x83, 0xff];
+const assetColors = new Set(["f2c14e", "4d7cfe"]);
+const neutralAssetSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 28"><path fill="#F2C14E" d="M5 4h40v20H5z"/><path fill="#4D7CFE" d="M55 4h40v20H55z"/></svg>\n`;
 const styleSpecPaths = [
   "references/styles/wechat-style-doodle.spec.json",
   "references/styles/xhs-style-cream-paper.spec.json",
@@ -218,8 +220,18 @@ function pathlessEnvironment(directory) {
   return environment;
 }
 
-function runOverlay(args, directory) {
-  const result = spawnSync(process.execPath, [overlayScript, ...args], {
+function writeNeutralAsset(directory, name = "neutral-asset.svg") {
+  const path = join(directory, name);
+  writeFileSync(path, neutralAssetSvg);
+  return path;
+}
+
+function runOverlay(args, directory, { autoAsset = true, script = overlayScript } = {}) {
+  const hasAssetSource = args.includes("--brand-svg") || args.includes("--brand-config")
+    || args.includes("--self-test");
+  const resolvedArgs = hasAssetSource || !autoAsset
+    ? args : [...args, "--brand-svg", writeNeutralAsset(directory)];
+  const result = spawnSync(process.execPath, [script, ...resolvedArgs], {
     cwd: skillRoot,
     encoding: "utf8",
     env: pathlessEnvironment(directory),
@@ -244,10 +256,10 @@ function expectFailure(args, directory, messagePattern) {
   return result;
 }
 
-function assertVisibleLogo(image, slot, label) {
+function assertVisibleAsset(image, slot, label) {
   let changedInside = 0;
   let changedOutside = 0;
-  let exactBrandRed = 0;
+  const renderedColors = new Set();
 
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
@@ -263,17 +275,15 @@ function assertVisibleLogo(image, slot, label) {
       if (inside) changedInside += 1;
       else changedOutside += 1;
 
-      if (image.rgba[offset] === brandRed[0] &&
-        image.rgba[offset + 1] === brandRed[1] &&
-        image.rgba[offset + 2] === brandRed[2] &&
-        image.rgba[offset + 3] === brandRed[3]) {
-        exactBrandRed += 1;
+      const color = image.rgba.subarray(offset, offset + 3).toString("hex");
+      if (image.rgba[offset + 3] === 0xff && assetColors.has(color)) {
+        renderedColors.add(color);
       }
     }
   }
 
-  assert.ok(changedInside >= 20, `${label} did not render a visible Logo in its brand slot`);
-  assert.ok(exactBrandRed >= 10, `${label} did not render the fixed #E63A46 brand color`);
+  assert.ok(changedInside >= 20, `${label} did not render a visible asset in its brand slot`);
+  assert.equal(renderedColors.size, 2, `${label} did not preserve both configured asset colors`);
   assert.equal(changedOutside, 0, `${label} changed ${changedOutside} pixels outside its brand slot`);
 }
 
@@ -312,7 +322,205 @@ test("self-test loads the vendored renderer without external commands", (t) => {
   assert.match(result.stdout, /brand overlay self-test passed/i);
 });
 
-test("renders a visible Logo on exact-size input for all real Style Specs", async (t) => {
+test("self-test runs through a symlinked CLI entrypoint", (t) => {
+  const directory = createTempDir(t, "brand-overlay-symlink-");
+  const linkedScript = join(directory, "apply-brand-overlay.mjs");
+  symlinkSync(overlayScript, linkedScript);
+  const result = runOverlay(["--self-test"], directory, { script: linkedScript });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /brand overlay self-test passed/i);
+});
+
+test("default config has the exact disabled schema", () => {
+  assert.deepEqual(readJson(join(skillRoot, "brand-overlay.config.json")), {
+    schema_version: 1,
+    asset: null
+  });
+});
+
+test("validate-only fails fast for the default unconfigured asset", (t) => {
+  const directory = createTempDir(t, "brand-overlay-preflight-default-");
+  expectFailure([
+    "--validate-only",
+    "--brand-config", join(skillRoot, "brand-overlay.config.json")
+  ], directory, /asset is not configured/i);
+});
+
+test("standalone mode requires a Style Spec and exactly one asset source", (t) => {
+  const directory = createTempDir(t, "brand-overlay-arguments-");
+  const specPath = join(directory, "style.spec.json");
+  const input = join(directory, "input.png");
+  const output = join(directory, "output.png");
+  const asset = writeNeutralAsset(directory);
+  writeFileSync(specPath, JSON.stringify(testSpec("argument-test")));
+  writeFileSync(input, solidPng(128, 96));
+
+  const missingSpec = runOverlay([
+    "--brand-svg", asset, "--input", input, "--output", output
+  ], directory, { autoAsset: false });
+  assert.notEqual(missingSpec.status, 0);
+  assert.match(missingSpec.stderr, /--style-spec is required/i);
+
+  const missingAsset = runOverlay([
+    "--style-spec", specPath, "--input", input, "--output", output
+  ], directory, { autoAsset: false });
+  assert.notEqual(missingAsset.status, 0);
+  assert.match(missingAsset.stderr, /exactly one of --brand-svg or --brand-config/i);
+
+  const bothAssets = runOverlay([
+    "--style-spec", specPath,
+    "--brand-svg", asset,
+    "--brand-config", join(skillRoot, "brand-overlay.config.json"),
+    "--input", input,
+    "--output", output
+  ], directory, { autoAsset: false });
+  assert.notEqual(bothAssets.status, 0);
+  assert.match(bothAssets.stderr, /exactly one of --brand-svg or --brand-config/i);
+});
+
+test("configured asset enforces skill-root path, hash, symlink, and SVG safety", async (t) => {
+  const directory = createTempDir(t, "brand-overlay-config-");
+  const assetDirectory = mkdtempSync(join(skillRoot, ".brand-overlay-config-test-"));
+  t.after(() => rmSync(assetDirectory, { recursive: true, force: true }));
+  const asset = writeNeutralAsset(assetDirectory);
+  const assetPath = relative(skillRoot, asset).replaceAll("\\", "/");
+  const assetHash = createHash("sha256").update(readFileSync(asset)).digest("hex");
+  const configPath = join(directory, "brand-overlay.config.json");
+  const specPath = join(directory, "style.spec.json");
+  const input = join(directory, "input.png");
+  const output = join(directory, "output.png");
+  const source = solidPng(128, 96);
+  writeFileSync(specPath, JSON.stringify(testSpec("configured-asset-test")));
+  writeFileSync(input, source);
+
+  const writeConfig = (assetConfig) => writeFileSync(configPath, `${JSON.stringify({
+    schema_version: 1,
+    asset: assetConfig
+  }, null, 2)}\n`);
+
+  writeConfig({ path: assetPath, sha256: assetHash });
+  const preflight = expectSuccess([
+    "--validate-only", "--brand-config", configPath
+  ], directory);
+  assert.match(preflight.stdout, /rendered visible pixels/i);
+  expectSuccess([
+    "--style-spec", specPath,
+    "--brand-config", configPath,
+    "--input", input,
+    "--output", output
+  ], directory);
+  assert.deepEqual(readFileSync(input), source, "configured overlay modified its source");
+  assertVisibleAsset(
+    decodePng(readFileSync(output), "configured output"),
+    testSpec("configured-asset-test").fixedComponents.brandSlot,
+    "configured output"
+  );
+
+  writeConfig(null);
+  expectFailure([
+    "--style-spec", specPath, "--brand-config", configPath,
+    "--input", input, "--output", output
+  ], directory, /asset is not configured/i);
+
+  writeConfig({ path: assetPath, sha256: "0".repeat(64) });
+  expectFailure([
+    "--style-spec", specPath, "--brand-config", configPath,
+    "--input", input, "--output", output
+  ], directory, /SHA-256 mismatch/i);
+
+  writeConfig({ path: "../outside.svg", sha256: assetHash });
+  expectFailure([
+    "--style-spec", specPath, "--brand-config", configPath,
+    "--input", input, "--output", output
+  ], directory, /inside the skill root/i);
+
+  const linkedAsset = join(assetDirectory, "linked.svg");
+  symlinkSync(asset, linkedAsset);
+  writeConfig({
+    path: relative(skillRoot, linkedAsset).replaceAll("\\", "/"),
+    sha256: assetHash
+  });
+  expectFailure([
+    "--style-spec", specPath, "--brand-config", configPath,
+    "--input", input, "--output", output
+  ], directory, /real file inside the skill root/i);
+
+  const invalidAsset = join(assetDirectory, "invalid.svg");
+  writeFileSync(invalidAsset, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></svg>\n`);
+  writeConfig({
+    path: relative(skillRoot, invalidAsset).replaceAll("\\", "/"),
+    sha256: createHash("sha256").update(readFileSync(invalidAsset)).digest("hex")
+  });
+  expectFailure([
+    "--style-spec", specPath, "--brand-config", configPath,
+    "--input", input, "--output", output
+  ], directory, /only group and path elements/i);
+
+  const invisibleAssets = [
+    {
+      name: "fill-none.svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" d="M1 1h8v8H1z"/></svg>\n`
+    },
+    {
+      name: "opacity-zero.svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#4D7CFE" opacity="0" d="M1 1h8v8H1z"/></svg>\n`
+    },
+    {
+      name: "outside-viewbox.svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#4D7CFE" d="M20 20h8v8h-8z"/></svg>\n`
+    }
+  ];
+  for (const invisible of invisibleAssets) {
+    const invisiblePath = join(assetDirectory, invisible.name);
+    writeFileSync(invisiblePath, invisible.svg);
+    writeConfig({
+      path: relative(skillRoot, invisiblePath).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(readFileSync(invisiblePath)).digest("hex")
+    });
+    expectFailure([
+      "--validate-only", "--brand-config", configPath
+    ], directory, /no visible pixels after rendering/i);
+  }
+
+  const weakAssets = [
+    {
+      name: "near-transparent.svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#4D7CFE" opacity="0.01" d="M0 0h10v10H0z"/></svg>\n`
+    },
+    {
+      name: "single-pixel.svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="#4D7CFE" d="M0 0h1v1H0z"/></svg>\n`
+    }
+  ];
+  for (const weak of weakAssets) {
+    const weakPath = join(assetDirectory, weak.name);
+    writeFileSync(weakPath, weak.svg);
+    writeConfig({
+      path: relative(skillRoot, weakPath).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(readFileSync(weakPath)).digest("hex")
+    });
+    expectFailure([
+      "--validate-only", "--brand-config", configPath
+    ], directory, /insufficient visible coverage after rendering/i);
+  }
+
+  for (const rootAttribute of ["fill=\"#4D7CFE\"", "opacity=\"0.5\""]) {
+    const rootAttributePath = join(assetDirectory, `root-${rootAttribute.startsWith("fill") ? "fill" : "opacity"}.svg`);
+    writeFileSync(
+      rootAttributePath,
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" ${rootAttribute}><path d="M1 1h8v8H1z"/></svg>\n`
+    );
+    writeConfig({
+      path: relative(skillRoot, rootAttributePath).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(readFileSync(rootAttributePath)).digest("hex")
+    });
+    expectFailure([
+      "--validate-only", "--brand-config", configPath
+    ], directory, /unsupported SVG root attribute.*put visual properties on g or path/i);
+  }
+});
+
+test("renders a visible generic asset on exact-size input for all real Style Specs", async (t) => {
   for (const specPath of styleSpecPaths) {
     const spec = readJson(specPath);
     await t.test(spec.id, (subtest) => {
@@ -332,13 +540,13 @@ test("renders a visible Logo on exact-size input for all real Style Specs", asyn
       const rendered = decodePng(readFileSync(output), output);
       assert.equal(rendered.width, spec.canvas.width);
       assert.equal(rendered.height, spec.canvas.height);
-      assertVisibleLogo(rendered, spec.fixedComponents.brandSlot, spec.id);
+      assertVisibleAsset(rendered, spec.fixedComponents.brandSlot, spec.id);
       assertNoTemporaryOutput(directory, output);
     });
   }
 });
 
-test("preserves representative model-native dimensions while applying the Logo", async (t) => {
+test("preserves representative model-native dimensions while applying the generic asset", async (t) => {
   const scenarios = [
     { specPath: styleSpecPaths[0], width: 1448, height: 1086 },
     { specPath: styleSpecPaths[1], width: 1086, height: 1448 },
@@ -365,7 +573,7 @@ test("preserves representative model-native dimensions while applying the Logo",
       const rendered = decodePng(readFileSync(output), output);
       assert.equal(rendered.width, scenario.width);
       assert.equal(rendered.height, scenario.height);
-      assertVisibleLogo(
+      assertVisibleAsset(
         rendered,
         scaleRect(spec.fixedComponents.brandSlot, spec.canvas, scenario),
         spec.id
@@ -432,7 +640,7 @@ test("batch mode processes PNG files without an external find command", (t) => {
   ], directory);
 
   assert.deepEqual(readdirSync(outputDir).sort(), ["01.png", "02.PNG"]);
-  assertVisibleLogo(decodePng(readFileSync(join(outputDir, "01.png")), "batch output"), spec.fixedComponents.brandSlot, "batch output");
+  assertVisibleAsset(decodePng(readFileSync(join(outputDir, "01.png")), "batch output"), spec.fixedComponents.brandSlot, "batch output");
 });
 
 test("successfully replaces an existing regular output", (t) => {
@@ -453,7 +661,7 @@ test("successfully replaces an existing regular output", (t) => {
   ], directory);
 
   assert.deepEqual(readFileSync(input), inputBytes, "replacement modified its source");
-  assertVisibleLogo(decodePng(readFileSync(output), "replacement output"), spec.fixedComponents.brandSlot, "replacement output");
+  assertVisibleAsset(decodePng(readFileSync(output), "replacement output"), spec.fixedComponents.brandSlot, "replacement output");
   assertNoTemporaryOutput(directory, output);
 });
 

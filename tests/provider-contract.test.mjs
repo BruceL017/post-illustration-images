@@ -58,9 +58,9 @@ function sameKeys(value, keys) {
   assert.deepEqual(Object.keys(value).sort(), [...keys].sort());
 }
 
-async function run(args) {
+async function run(args, script = SCRIPT) {
   return new Promise((done, reject) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], {
+    const child = spawn(process.execPath, [script, ...args], {
       cwd: ROOT,
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -153,11 +153,11 @@ function styleData(platform) {
       style_reference: "assets/style-references/wechat-doodle.png"
     },
     brand: {
-      enabled: true,
-      policy_default_enabled: true,
+      enabled: false,
+      policy_default_enabled: false,
       override: null,
       policy_source: "style-default",
-      disabled_reason: null
+      disabled_reason: "disabled-by-style-default"
     },
     geometry: {
       geometry_profile: "gpt-image-2-v1",
@@ -321,6 +321,10 @@ async function writePlan(data, mutate) {
 async function generateFixture(t, options = {}) {
   const data = await fixture(t, options);
   const planData = await writePlan(data);
+  return promoteToGenerate(data, planData);
+}
+
+async function promoteToGenerate(data, planData) {
   const pathSet = names(data.platform, data.request.attempt, "generate");
   const planInput = { role: "illustration_plan", path: data.pathSet.plan, sha256: await digest(planData.planPath) };
   const shotInput = { role: "shot_list", path: data.pathSet.shot, sha256: await digest(planData.shotPath) };
@@ -354,21 +358,72 @@ async function generateFixture(t, options = {}) {
   return { ...data, pathSet, request, requestPath, planData, prompt, finalImage, sourceImage };
 }
 
-async function writeBundle(data, mutate) {
+async function createConfiguredProviderRoot(t) {
+  const isolatedRoot = await mkdtemp(join(tmpdir(), "illustration-provider-configured-"));
+  t.after(() => rm(isolatedRoot, { recursive: true, force: true }));
+  const copiedFiles = [
+    "scripts/provider-contract.mjs",
+    "scripts/apply-brand-overlay.mjs",
+    "vendor/resvg-wasm/index.js",
+    "vendor/resvg-wasm/index_bg.wasm",
+    "references/style-registry.json",
+    "references/gpt-image-2-geometry.spec.json",
+    "references/styles/wechat-style-doodle.md",
+    "references/styles/wechat-style-doodle.spec.json",
+    "assets/style-references/wechat-doodle.png"
+  ];
+  for (const relativePath of copiedFiles) {
+    const target = join(isolatedRoot, relativePath);
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(join(ROOT, relativePath), target);
+  }
+  const assetPath = join(isolatedRoot, "assets/brand/configured.svg");
+  await mkdir(dirname(assetPath), { recursive: true });
+  await writeFile(
+    assetPath,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><path fill="#4D7CFE" d="M2 2h16v6H2z"/></svg>\n`
+  );
+  await writeFile(join(isolatedRoot, "brand-overlay.config.json"), `${JSON.stringify({
+    schema_version: 1,
+    asset: {
+      path: "assets/brand/configured.svg",
+      sha256: await digest(assetPath)
+    }
+  }, null, 2)}\n`);
+  return {
+    providerScript: join(isolatedRoot, "scripts/provider-contract.mjs"),
+    overlayScript: join(isolatedRoot, "scripts/apply-brand-overlay.mjs"),
+    configPath: join(isolatedRoot, "brand-overlay.config.json"),
+    styleSpecPath: join(isolatedRoot, "references/styles/wechat-style-doodle.spec.json")
+  };
+}
+
+async function writeBundle(data, mutate, overlay = null) {
   const imageId = data.planData.plan.anchors[0].image_id;
-  const promptPath = await put(data.runDir, data.prompt, "Generate one boundary decision diagram. No logo, TF, Tranfu, watermark, badge, or reserve box.\n");
+  const promptPath = await put(data.runDir, data.prompt, "Generate one boundary decision diagram. No logo, brand name, watermark, badge, or reserve box.\n");
   if (data.sourceImage) {
     await mkdir(dirname(join(data.runDir, data.sourceImage)), { recursive: true });
     await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.sourceImage));
   }
   await mkdir(dirname(join(data.runDir, data.finalImage)), { recursive: true });
-  await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.finalImage));
-  if (data.sourceImage) await appendFile(join(data.runDir, data.finalImage), "brand-overlay");
+  if (data.sourceImage && overlay) {
+    const overlaid = await run([
+      "--style-spec", overlay.styleSpecPath,
+      "--brand-config", overlay.configPath,
+      "--input", join(data.runDir, data.sourceImage),
+      "--output", join(data.runDir, data.finalImage)
+    ], overlay.overlayScript);
+    assert.equal(overlaid.code, 0, overlaid.stderr || overlaid.stdout);
+  } else {
+    await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.finalImage));
+    if (data.sourceImage) await appendFile(join(data.runDir, data.finalImage), "brand-overlay");
+  }
   const finalStat = await stat(join(data.runDir, data.finalImage));
   const sourceStat = data.sourceImage ? await stat(join(data.runDir, data.sourceImage)) : finalStat;
   const dims = data.planData.style.dimensions;
   const disabled = data.planData.plan.brand.disabled_reason;
-  const manifest = `post_illustration_bundle:\n  platform: ${data.request.provider_platform}\n  style_id: ${data.planData.plan.style.id}\n  images:\n    - image_id: ${imageId}\n      file: ${relative(data.pathSet.base, data.finalImage)}\n`;
+  const manifestImagePath = relative(data.pathSet.base, data.finalImage).replaceAll("\\", "/");
+  const manifest = `post_illustration_bundle:\n  platform: ${data.request.provider_platform}\n  style_id: ${data.planData.plan.style.id}\n  images:\n    - image_id: ${imageId}\n      file: ${manifestImagePath}\n`;
   const manifestPath = await put(data.runDir, data.pathSet.manifest, manifest);
   const anchor = data.planData.plan.anchors[0];
   const image = {
@@ -455,6 +510,75 @@ test("plan validates and finalizes exactly plan plus shot list without touching 
   assert.equal(await digest(data.sourceFile), sourceHash);
 });
 
+test("explicit enablement blocks when the fixed skill config has no asset", async (t) => {
+  const data = await fixture(t);
+  data.request.options.brand_override = "enabled";
+  await put(data.runDir, data.pathSet.request, `${JSON.stringify(data.request, null, 2)}\n`);
+  const validated = await run(["validate-request", data.requestPath]);
+  assert.equal(validated.code, 2);
+  assert.equal(validated.json.status, "BLOCKED");
+  assert.ok(validated.json.issues.some((item) => item.code === "required_brand_asset_unavailable"));
+});
+
+test("explicit enablement validates and finalizes the complete illustration-v1 flow", async (t) => {
+  const data = await fixture(t);
+  data.request.options.brand_override = "enabled";
+  await put(data.runDir, data.pathSet.request, `${JSON.stringify(data.request, null, 2)}\n`);
+  const configured = await createConfiguredProviderRoot(t);
+
+  const validated = await run(
+    ["validate-request", data.requestPath],
+    configured.providerScript
+  );
+  assert.equal(validated.code, 0, validated.stderr || validated.stdout);
+  assert.equal(validated.json.status, "PASS");
+
+  const planData = await writePlan(data, (plan) => {
+    plan.brand = {
+      enabled: true,
+      policy_default_enabled: false,
+      override: "enabled",
+      policy_source: "user-override",
+      disabled_reason: null
+    };
+  });
+  const planFinalized = await run(["finalize", data.requestPath], configured.providerScript);
+  assert.equal(planFinalized.code, 0, planFinalized.stderr || planFinalized.stdout);
+  assert.equal(planFinalized.json.status, "PASS");
+
+  const generated = await promoteToGenerate(data, planData);
+  const generateValidated = await run(["validate-request", generated.requestPath], configured.providerScript);
+  assert.equal(generateValidated.code, 0, generateValidated.stderr || generateValidated.stdout);
+  await writeBundle(generated);
+  const appendedOnly = await run(["finalize", generated.requestPath], configured.providerScript);
+  assert.equal(appendedOnly.code, 2);
+  assert.ok(appendedOnly.json.issues.some((item) => item.code === "invalid_illustration_brand"
+    && /pixel delta/i.test(item.message)));
+
+  const shiftedSpec = JSON.parse(await readFile(configured.styleSpecPath, "utf8"));
+  shiftedSpec.fixedComponents.brandSlot.x = shiftedSpec.layout.brandReservedArea.x;
+  shiftedSpec.fixedComponents.brandSlot.y = 90;
+  const shiftedSpecPath = join(dirname(configured.styleSpecPath), "shifted-brand-slot.spec.json");
+  await writeFile(shiftedSpecPath, `${JSON.stringify(shiftedSpec, null, 2)}\n`);
+  await writeBundle(generated, null, { ...configured, styleSpecPath: shiftedSpecPath });
+  const outsideSlot = await run(["finalize", generated.requestPath], configured.providerScript);
+  assert.equal(outsideSlot.code, 2);
+  assert.ok(outsideSlot.json.issues.some((item) => item.code === "invalid_illustration_brand"
+    && /outside=[1-9][0-9]*/i.test(item.message)));
+
+  const { bundle } = await writeBundle(generated, null, configured);
+  assert.equal(bundle.brand.enabled, true);
+  assert.equal(bundle.images[0].brand_overlay_status, "applied");
+  assert.deepEqual(bundle.images[0].post_generation_actions, ["brand-overlay-native"]);
+
+  const generateFinalized = await run(["finalize", generated.requestPath], configured.providerScript);
+  assert.equal(generateFinalized.code, 0, generateFinalized.stderr || generateFinalized.stdout);
+  assert.equal(generateFinalized.json.status, "PASS");
+  assert.deepEqual(generateFinalized.json.artifacts.map((item) => item.role), [
+    "illustration_bundle", "native_manifest", "prompt", "source_image", "delivery_image"
+  ]);
+});
+
 test("request validation rejects extra inputs, wrong aliases, stale attempts, and symlink inputs", async (t) => {
   const extra = await fixture(t);
   extra.request.inputs.push({ ...extra.request.inputs[0], role: "extra" });
@@ -505,7 +629,7 @@ test("plan finalization rejects generated images, filler counts, stale shot hash
   }
 });
 
-test("generate finalizes exact branded prompts, sources, deliveries, native manifest, and bundle", async (t) => {
+test("generate finalizes exact default-off prompts, deliveries, native manifest, and bundle", async (t) => {
   const data = await generateFixture(t);
   const sourceHash = await digest(data.sourceFile);
   const validated = await run(["validate-request", data.requestPath]);
@@ -518,7 +642,7 @@ test("generate finalizes exact branded prompts, sources, deliveries, native mani
   assert.equal(finalized.json.status, "PASS");
   assert.deepEqual(finalized.json.artifacts.map((item) => item.path), data.request.expected_artifacts);
   assert.deepEqual(finalized.json.artifacts.map((item) => item.role), [
-    "illustration_bundle", "native_manifest", "prompt", "source_image", "delivery_image"
+    "illustration_bundle", "native_manifest", "prompt", "delivery_image"
   ]);
   assert.equal(await digest(data.sourceFile), sourceHash);
 });

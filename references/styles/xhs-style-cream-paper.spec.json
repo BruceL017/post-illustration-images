@@ -16,7 +16,6 @@
     "accent.coral": "#F26D5B",
     "accent.skyBlue": "#B9D7FF",
     "accent.yellow": "#FFD966",
-    "brand.red": "#E63A46",
     "surface.pastelTint": "#F5F1E8",
     "shadow.warmGray": "#D8CFC3"
   },
@@ -53,7 +52,7 @@
     }
   },
   "brandPolicy": {
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "userOverrideAllowed": true
   },
   "inputHandling": {
