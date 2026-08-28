@@ -24,31 +24,24 @@ const gates = {
   aspect_ratio: true,
   safe_area: true,
   single_core_meaning: true,
-  identity_leakage: true,
-  brand_free: true
+  identity_leakage: true
 };
 const platformFixtures = Object.freeze({
   xhs: Object.freeze({
     specPlatform: "xiaohongshu",
     canvas: Object.freeze({ width: 1080, height: 1440, ratio: "3:4", orientation: "vertical" }),
-    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 }),
-    brandReservedArea: Object.freeze({ x: 842, y: 44, width: 208, height: 90 }),
-    brandSlot: Object.freeze({ x: 872, y: 64, width: 148, height: 40 })
+    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 })
   }),
   weibo: Object.freeze({
     specPlatform: "weibo",
     canvas: Object.freeze({ width: 1080, height: 1440, ratio: "3:4", orientation: "vertical" }),
-    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 }),
-    brandReservedArea: Object.freeze({ x: 842, y: 44, width: 208, height: 90 }),
-    brandSlot: Object.freeze({ x: 872, y: 64, width: 148, height: 40 })
+    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 })
   }),
   toutiao: Object.freeze({
     specPlatform: "toutiao",
     canvas: Object.freeze({ width: 1600, height: 900, ratio: "16:9", orientation: "horizontal" }),
     outputCanvas: Object.freeze({ width: 1672, height: 941 }),
     contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
-    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
-    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 }),
     inputHandling: Object.freeze({
       preserveNativeOutput: true,
       ratioTolerance: 0.002,
@@ -149,7 +142,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
   mkdirSync(resolve(root, "calibration"), { recursive: true });
 
   writeJson(resolve(root, "candidate.json"), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "approved",
     template_ready: true,
     style: {
@@ -158,11 +151,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
       platform,
       defaultUse: "Neutral explanatory knowledge cards.",
       aliases: [`${id} alias`],
-      ...(makeDefault === undefined ? {} : { makeDefault }),
-      brandPolicy: {
-        defaultEnabled: false,
-        userOverrideAllowed: true
-      }
+      ...(makeDefault === undefined ? {} : { makeDefault })
     },
     files: {
       styleMarkdown: "style.md",
@@ -205,13 +194,8 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
     platform: fixture.specPlatform,
     canvas: fixture.canvas,
     layout: {
-      contentSafeArea: fixture.contentSafeArea,
-      brandReservedArea: fixture.brandReservedArea
+      contentSafeArea: fixture.contentSafeArea
     },
-    fixedComponents: {
-      brandSlot: { enabled: true, anchor: "top-right", ...fixture.brandSlot, assetFit: "contain" }
-    },
-    brandPolicy: { defaultEnabled: false, userOverrideAllowed: true },
     inputHandling: fixture.inputHandling ?? {
       preserveNativeOutput: true,
       ratioTolerance: 0.002,
@@ -223,7 +207,6 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
       allowWrongRatioStretch: false,
       wrongRatioAction: "regenerate"
     },
-    generationConstraints: { forbidModelDrawnBrand: true, keepBrandReservedAreaClear: true },
     styleReference: {
       image: `assets/style-references/${id}.png`,
       usage: "QA only; never use for generation.",
@@ -292,8 +275,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
     selected_reference: {
       image_id: "concept",
       source_image: "calibration/concept.png",
-      path: "calibration/style-reference.png",
-      unbranded: true
+      path: "calibration/style-reference.png"
     },
     contact_sheet: "calibration/contact-sheet.png"
   });
@@ -320,6 +302,14 @@ test("existing registry covers all valid production styles and renders determini
   assert.equal(renderStyleIndex(registry), renderStyleIndex(structuredClone(registry)));
 });
 
+test("installed registry rejects legacy style spec fields", (t) => {
+  const skillRoot = createSkillRoot(t);
+  mutateJson(resolve(skillRoot, "references/styles/xhs-style-cream-paper.spec.json"), (spec) => {
+    spec.brandPolicy = { defaultEnabled: false, userOverrideAllowed: true };
+  });
+  assert.throws(() => validateInstalledRegistry({ skillRoot }), /brandPolicy is not allowed/);
+});
+
 test("valid approved bundle passes", (t) => {
   const skillRoot = createSkillRoot(t);
   const bundleDir = createBundle(t);
@@ -327,16 +317,93 @@ test("valid approved bundle passes", (t) => {
   assert.equal(result.candidate.style.id, "xhs-test-template");
 });
 
-test("candidate branding must remain disabled by default", (t) => {
+test("candidate schemaVersion 1 is rejected", (t) => {
   const skillRoot = createSkillRoot(t);
   const bundleDir = createBundle(t);
   mutateJson(resolve(bundleDir, "candidate.json"), (candidate) => {
-    candidate.style.brandPolicy.defaultEnabled = true;
+    candidate.schemaVersion = 1;
   });
-  mutateJson(resolve(bundleDir, "style.spec.json"), (spec) => {
-    spec.brandPolicy.defaultEnabled = true;
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /schemaVersion must be 2/);
+});
+
+const legacyBrandFields = [
+  {
+    name: "candidate style.brandPolicy",
+    file: "candidate.json",
+    mutate: (candidate) => { candidate.style.brandPolicy = { defaultEnabled: false, userOverrideAllowed: true }; },
+    error: /style\.brandPolicy is not allowed/
+  },
+  {
+    name: "spec brandPolicy",
+    file: "style.spec.json",
+    mutate: (spec) => { spec.brandPolicy = { defaultEnabled: false, userOverrideAllowed: true }; },
+    error: /brandPolicy is not allowed/
+  },
+  {
+    name: "spec layout.brandReservedArea",
+    file: "style.spec.json",
+    mutate: (spec) => { spec.layout.brandReservedArea = { x: 842, y: 44, width: 208, height: 90 }; },
+    error: /layout\.brandReservedArea is not allowed/
+  },
+  {
+    name: "spec fixedComponents.brandSlot",
+    file: "style.spec.json",
+    mutate: (spec) => { spec.fixedComponents = { brandSlot: { x: 872, y: 64, width: 148, height: 40 } }; },
+    error: /fixedComponents\.brandSlot is not allowed/
+  },
+  {
+    name: "spec generationConstraints.forbidModelDrawnBrand",
+    file: "style.spec.json",
+    mutate: (spec) => { spec.generationConstraints = { forbidModelDrawnBrand: true }; },
+    error: /generationConstraints\.forbidModelDrawnBrand is not allowed/
+  },
+  {
+    name: "spec generationConstraints.keepBrandReservedAreaClear",
+    file: "style.spec.json",
+    mutate: (spec) => { spec.generationConstraints = { keepBrandReservedAreaClear: true }; },
+    error: /generationConstraints\.keepBrandReservedAreaClear is not allowed/
+  },
+  {
+    name: "QA top-level hard_gates.brand_free",
+    file: "qa.json",
+    mutate: (qa) => { qa.hard_gates.brand_free = true; },
+    error: /hard_gates\.brand_free is not allowed/
+  },
+  {
+    name: "QA per-image hard_gates.brand_free",
+    file: "qa.json",
+    mutate: (qa) => { qa.calibration_images[0].hard_gates.brand_free = true; },
+    error: /concept\.hard_gates\.brand_free is not allowed/
+  },
+  {
+    name: "QA selected_reference.unbranded",
+    file: "qa.json",
+    mutate: (qa) => { qa.selected_reference.unbranded = true; },
+    error: /selected_reference\.unbranded is not allowed/
+  }
+];
+
+for (const legacy of legacyBrandFields) {
+  test(`legacy ${legacy.name} is rejected`, (t) => {
+    const skillRoot = createSkillRoot(t);
+    const bundleDir = createBundle(t);
+    mutateJson(resolve(bundleDir, legacy.file), legacy.mutate);
+    assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), legacy.error);
   });
-  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /brandPolicy\.defaultEnabled must be false/);
+}
+
+test("identity leakage rejects logos, watermarks, and signatures", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t);
+  mutateJson(resolve(bundleDir, "qa.json"), (qa) => { qa.hard_gates.identity_leakage = false; });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /identity_leakage must be true/);
+});
+
+test("per-image identity leakage rejects logos, watermarks, and signatures", (t) => {
+  const skillRoot = createSkillRoot(t);
+  const bundleDir = createBundle(t);
+  mutateJson(resolve(bundleDir, "qa.json"), (qa) => { qa.calibration_images[0].hard_gates.identity_leakage = false; });
+  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /concept\.hard_gates\.identity_leakage must be true/);
 });
 
 test("valid XHS bundle preserves native 1086x1448 calibration output", (t) => {
@@ -477,13 +544,6 @@ test("in-bounds geometry that differs from the platform baseline is rejected", (
   const bundleDir = createBundle(t);
   mutateJson(resolve(bundleDir, "style.spec.json"), (spec) => { spec.layout.contentSafeArea.x = 81; });
   assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /contentSafeArea must match the platform baseline/);
-});
-
-test("brand slot outside its reserved area is rejected", (t) => {
-  const skillRoot = createSkillRoot(t);
-  const bundleDir = createBundle(t);
-  mutateJson(resolve(bundleDir, "style.spec.json"), (spec) => { spec.fixedComponents.brandSlot.x = 800; });
-  assert.throws(() => validateStyleBundle({ bundleDir, skillRoot }), /brandSlot starts outside brandReservedArea/);
 });
 
 test("invalid selected reference PNG is rejected", (t) => {

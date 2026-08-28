@@ -130,10 +130,9 @@ The Style Spec canvas is a design coordinate system. `GenerationGeometry` owns t
 2. If the actual ratio matches within `ratioTolerance` and any configured `minimum_short_edge` is met, accept it as `pass-native`; `delivery_dimensions` equals `source_dimensions`.
 3. Reject output outside ratio tolerance or below the configured minimum edge. Retry the same canonical request with stronger geometry wording; never crop, pad, rotate, stretch, resize, or upscale it.
 4. Allow at most three submitted image candidates per image, then stop as `BLOCKER: backend output geometry mismatch` without asking the user to select a size.
-5. When branding is disabled, deliver the accepted source directly and do not invoke a raster renderer.
-6. When branding is enabled, require the verified backend artifact contract to materialize PNG, then run `scripts/apply-brand-overlay.mjs`. Do not silently convert a JPEG source; stop as `BLOCKER: brand overlay input format unavailable`. The overlay must return exactly the source width and height.
-7. Record `requested_dimensions`, `source_dimensions`, `delivery_dimensions`, `native_output_preserved`, ordered `post_generation_actions`, structured geometry attempts, and any overlay renderer or hard-limit exporter used.
-8. Never claim the requested generation size was honored without inspecting the actual raster.
+5. Deliver the accepted source directly with its native extension unless a verified publishing-path exporter is required.
+6. Record `requested_dimensions`, `source_dimensions`, `delivery_dimensions`, `native_output_preserved`, ordered `post_generation_actions`, structured geometry attempts, and any hard-limit exporter used.
+7. Never claim the requested generation size was honored without inspecting the actual raster.
 
 ## Platform Delivery Compatibility
 
@@ -146,7 +145,7 @@ Accepted source geometry remains native. Platform format and byte limits never a
 | Xiaohongshu image post | No exact `1080x1440` requirement; accept an in-tolerance raster such as `1086x1448`. | PNG or JPEG; current uploader checks are publishing constraints, not a resize mandate. |
 | Zhihu body image | No exact body-image pixel requirement; accept `2048x1152` and in-tolerance `1672x941` natively. | Use a same-dimension PNG/JPEG export only when the active upload path rejects the source. |
 
-Choose the rule only when `IntakeContext.publishing_path` identifies the actual path. If it is `null`, deliver the native artifact and do not ask for a path merely to speculate about compression. If the source already passes a known path's format and byte limit, perform no export. If an export is required, first verify an available exporter can preserve width and height while meeting that exact format/byte limit; otherwise stop as `BLOCKER: required hard-limit export unavailable`. Record the exporter, append `hard-limit-export` to `post_generation_actions`, and verify output dimensions. A branded export may record both `brand-overlay-native` and `hard-limit-export` in execution order. Compression or conversion is not geometry normalization.
+Choose the rule only when `IntakeContext.publishing_path` identifies the actual path. If it is `null`, deliver the native artifact and do not ask for a path merely to speculate about compression. If the source already passes a known path's format and byte limit, perform no export. If an export is required, first verify an available exporter can preserve width and height while meeting that exact format/byte limit; otherwise stop as `BLOCKER: required hard-limit export unavailable`. Record the exporter, append `hard-limit-export` to `post_generation_actions`, and verify output dimensions. Compression or conversion is not geometry normalization.
 
 No Weibo or Toutiao uploader limit is bundled yet. Do not invent one: format/byte adaptation requires a verified publishing path, while `publishing_path: null` keeps native delivery. Toutiao's `minShortEdge: 900` is an internal style quality floor enforced in calibration and production, not a claim about the uploader.
 
@@ -176,9 +175,7 @@ Sources checked for this policy: [WeChat web editor image requirements](https://
 | Resolved model or ratio has no verified geometry profile | `BLOCKER: backend geometry profile unavailable` |
 | Request returns no current valid raster artifact | `BLOCKER: backend output unavailable` |
 | Source ratio or configured minimum edge conflicts with the Style Spec | `BLOCKER: backend output geometry mismatch` |
-| Branding is enabled but the backend cannot materialize PNG | `BLOCKER: brand overlay input format unavailable` |
 | A known publishing limit requires export but no same-dimension exporter is available | `BLOCKER: required hard-limit export unavailable` |
-| Node.js 22+ or the vendored finalizer is unavailable | `BLOCKER: required brand overlay unavailable` only when branding is enabled |
 | A process started by the run cannot be stopped | `BLOCKER: backend process cleanup failed` |
 
 Always name the observed layer: adapter, configuration, credential access, endpoint, model, artifact, geometry, or process cleanup. Never reduce all of these to “native image generation unavailable.”

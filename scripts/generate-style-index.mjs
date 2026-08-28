@@ -81,20 +81,18 @@ export function renderStyleIndex(registry) {
     "Important:",
     "",
     "- `references/style-registry.json` is the machine-readable source of truth for registered styles and routing metadata.",
-    "- Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, component slots, and brand defaults.",
+    "- Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, and fixed components.",
     "- Style Spec canvas dimensions are design-coordinate geometry for target ratio and layout. Accepted model output pixels are preserved for delivery; request dimensions come from the verified generation geometry profile.",
     "- Style reference images are QA baselines only. They are never generation inputs and their semantic content must not be copied.",
-    "- Brand resolution is: explicit user choice, then `brandPolicy.defaultEnabled`, then compatibility default `false` for an older spec without `brandPolicy`.",
-    "- When branding resolves disabled, the brand area is not an active reservation, although every production spec retains valid top-right brand geometry.",
     "",
-    "| Style ID | Platform | Style File | Machine Spec | Style Reference | Brand Plugin | Page Badges | Default Use |",
-    "|---|---|---|---|---|---|---|---|"
+    "| Style ID | Platform | Style File | Machine Spec | Style Reference | Page Badges | Default Use |",
+    "|---|---|---|---|---|---|---|"
   ];
 
   for (const style of registry.styles) {
     const platform = platformById.get(style.platform);
     lines.push(
-      `| ${code(style.id)} | ${markdownCell(platform.displayName)} | ${code(style.styleFile)} | ${code(style.specFile)} | ${code(style.styleReference)} | spec default, user-overridable | disabled | ${markdownCell(style.defaultUse)} |`
+      `| ${code(style.id)} | ${markdownCell(platform.displayName)} | ${code(style.styleFile)} | ${code(style.specFile)} | ${code(style.styleReference)} | disabled | ${markdownCell(style.defaultUse)} |`
     );
   }
 
@@ -134,9 +132,9 @@ export function renderStyleIndex(registry) {
 
   lines.push(
     "",
-    "Do not preselect image count, aspect ratio, palette, safe area, brand geometry, page badges, or other fixed slots before selecting a style.",
+    "Do not preselect image count, aspect ratio, palette, safe area, page badges, or other fixed components before selecting a style.",
     "",
-    "Use each registered spec as the source of truth for scripts and QA. Use its Style Reference only for visual-system QA and failure review; ignore reference semantics and watermark state.",
+    "Use each registered spec as the source of truth for scripts and QA. Use its Style Reference only for visual-system QA and failure review; ignore reference semantics.",
     ""
   );
 

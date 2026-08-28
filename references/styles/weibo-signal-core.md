@@ -38,12 +38,12 @@ Use shallow dark-glass layering, subtle matte grain, sparse particles, restraine
 
 ## Platform Geometry
 
-Use 1080 x 1440 as the Weibo design coordinate system. Preserve any accepted native 3:4 raster within ratio tolerance `0.002`; never crop, pad, stretch, rotate, resize, or upscale it to the design coordinates. Keep meaningful content inside `x=80, y=96, w=920, h=1248`. Keep the top-right reserved area `x=842, y=44, w=208, h=90` naturally quiet when branding is enabled; the production brand slot is `x=872, y=64, w=148, h=40`.
+Use 1080 x 1440 as the Weibo design coordinate system. Preserve any accepted native 3:4 raster within ratio tolerance `0.002`; never crop, pad, stretch, rotate, resize, or upscale it to the design coordinates. Keep meaningful content inside `x=80, y=96, w=920, h=1248`.
 
-## Reference And Branding Policy
+## Reference Policy
 
-The Style Reference is a user-authorized QA baseline only and is never a generation input. Ignore all reference text, topic, names, logo, watermark state, exact icon assets, and exact layout. Compare only abstract color roles, typography character, density, material treatment, component language, and composition grammar. The image model must not draw branding; production branding is resolved from `brandPolicy` and added deterministically after generation.
+The Style Reference is a user-authorized QA baseline only and is never a generation input. Ignore all reference text, topic, names, source identity, exact icon assets, and exact layout. Compare only abstract color roles, typography character, density, material treatment, component language, and composition grammar.
 
 ## Prohibitions
 
-No source copy, source topic, named entities, exact coordinates, exact panel counts, exact connector paths, proprietary assets, logo, fake brand, watermark, model signature, page-number badge, placeholder, reserve box, visible slot marker, or source reconstruction. Never pass the Style Reference to the generation backend.
+No source copy, source topic, named entities, exact coordinates, exact panel counts, exact connector paths, proprietary assets, page-number badge, placeholder, reserve box, visible slot marker, or source reconstruction. Never pass the Style Reference to the generation backend.
