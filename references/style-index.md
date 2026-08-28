@@ -22,6 +22,7 @@ Important:
 | `zhihu-tech` | Zhihu | `references/styles/zhihu-style-title.md` | `references/styles/zhihu-style-title.spec.json` | `assets/style-references/zhihu-tech.png` | spec default, user-overridable | disabled | Fixed 16:9 modern AI/SaaS/developer-tool infographic. |
 | `weibo-signal-core` | Weibo | `references/styles/weibo-signal-core.md` | `references/styles/weibo-signal-core.spec.json` | `assets/style-references/weibo-signal-core.png` | spec default, user-overridable | disabled | 微博竖版科技概念、流程机制、对比关系与检查清单图解。 |
 | `toutiao-luminous-tech` | Toutiao | `references/styles/toutiao-luminous-tech.md` | `references/styles/toutiao-luminous-tech.spec.json` | `assets/style-references/toutiao-luminous-tech.png` | spec default, user-overridable | disabled | 头条号科技概念、产品机制、流程解释与发布前检查配图。 |
+| `xhs-vibrant-scrapbook` | Xiaohongshu | `references/styles/xhs-vibrant-scrapbook.md` | `references/styles/xhs-vibrant-scrapbook.spec.json` | `assets/style-references/xhs-vibrant-scrapbook.png` | spec default, user-overridable | disabled | energetic explainers, processes, and checklists |
 
 ## Platform Routing
 
@@ -76,6 +77,7 @@ If the platform is not stated and cannot be inferred from the source content, as
 | 暖橙色 / 暖橙 / 橙色 / 橙色撕纸 / 暖橙撕纸 / orange card / torn paper / Quick Guide / Key Point | `xhs-orange-card` |
 | 信号核心 / 黑底红光科技 / red signal tech | `weibo-signal-core` |
 | 头条号明亮科技 / 今日头条科技配图 / 高调科技 / 柔性3D流程 / luminous tech | `toutiao-luminous-tech` |
+| 活力手帐 / 高能拼贴 / vibrant scrapbook | `xhs-vibrant-scrapbook` |
 
 Do not preselect image count, aspect ratio, palette, safe area, brand geometry, page badges, or other fixed slots before selecting a style.
 

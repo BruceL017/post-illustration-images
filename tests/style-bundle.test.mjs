@@ -302,7 +302,7 @@ function createBundle(t, id = "xhs-test-template", { platform = "xhs", makeDefau
 
 test("existing registry covers all valid production styles and renders deterministically", () => {
   const result = validateInstalledRegistry({ skillRoot: repositoryRoot });
-  assert.equal(result.styles, 7);
+  assert.equal(result.styles, 8);
   const registry = json(resolve(repositoryRoot, "references/style-registry.json"));
   assert.deepEqual(registry.styles.map((style) => style.id), [
     "wechat-doodle",
@@ -311,7 +311,8 @@ test("existing registry covers all valid production styles and renders determini
     "xhs-orange-card",
     "zhihu-tech",
     "weibo-signal-core",
-    "toutiao-luminous-tech"
+    "toutiao-luminous-tech",
+    "xhs-vibrant-scrapbook"
   ]);
   assert.deepEqual(registry.platforms.map((platform) => platform.id), ["wechat", "xhs", "zhihu", "weibo", "toutiao"]);
   assert.equal(registry.platforms.find((platform) => platform.id === "weibo").defaultStyleId, "weibo-signal-core");
@@ -619,7 +620,7 @@ test("first Weibo install atomically registers the platform and new default", (t
     canvas: { width: 1080, height: 1440, ratio: "3:4", orientation: "vertical" },
     routingPhrases: ["微博", "微博配图", "微博竖版配图", "微博竖版信息图"]
   });
-  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 7);
+  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 8);
   assert.match(readFileSync(resolve(skillRoot, "references/style-index.md"), "utf8"), /Use Weibo when the user says:/);
 });
 
@@ -654,7 +655,7 @@ test("first Toutiao install registers a flexible 16:9 platform default", (t) => 
     },
     routingPhrases: ["头条号", "今日头条", "头条配图", "头条号配图"]
   });
-  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 7);
+  assert.equal(validateInstalledRegistry({ skillRoot }).styles, 8);
 });
 
 test("makeDefault true replaces an existing platform default", (t) => {

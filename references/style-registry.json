@@ -201,6 +201,21 @@
         "luminous tech"
       ],
       "defaultUse": "头条号科技概念、产品机制、流程解释与发布前检查配图。"
+    },
+    {
+      "id": "xhs-vibrant-scrapbook",
+      "displayName": "活力手帐拼贴",
+      "platform": "xhs",
+      "styleFile": "references/styles/xhs-vibrant-scrapbook.md",
+      "specFile": "references/styles/xhs-vibrant-scrapbook.spec.json",
+      "styleReference": "assets/style-references/xhs-vibrant-scrapbook.png",
+      "provenanceFile": "references/styles/xhs-vibrant-scrapbook.provenance.json",
+      "aliases": [
+        "活力手帐",
+        "高能拼贴",
+        "vibrant scrapbook"
+      ],
+      "defaultUse": "energetic explainers, processes, and checklists"
     }
   ]
 }

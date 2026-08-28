@@ -1,0 +1,94 @@
+{
+  "id": "xhs-vibrant-scrapbook",
+  "styleFile": "references/styles/xhs-vibrant-scrapbook.md",
+  "platform": "xiaohongshu",
+  "canvas": {
+    "width": 1080,
+    "height": 1440,
+    "ratio": "3:4",
+    "orientation": "vertical"
+  },
+  "colors": {
+    "background.sunnyYellow": "#F4D45C",
+    "paper.softWhite": "#FFFDF6",
+    "ink.strongBlack": "#1A1918",
+    "accent.signalRed": "#D93A49",
+    "accent.brightCyan": "#1CA6C9",
+    "grid.softGray": "#E8E7DF",
+    "highlight.paleYellow": "#FFE487"
+  },
+  "layout": {
+    "outerBackgroundRegion": {
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1440
+    },
+    "mainPaperRegion": {
+      "x": 48,
+      "y": 48,
+      "width": 984,
+      "height": 1344
+    },
+    "contentSafeArea": {
+      "x": 80,
+      "y": 96,
+      "width": 920,
+      "height": 1248
+    },
+    "brandReservedArea": {
+      "x": 842,
+      "y": 44,
+      "width": 208,
+      "height": 90
+    }
+  },
+  "fixedComponents": {
+    "pageNumberBadge": false,
+    "brandSlot": {
+      "enabled": true,
+      "anchor": "top-right",
+      "x": 872,
+      "y": 64,
+      "width": 148,
+      "height": 40,
+      "assetFit": "contain"
+    }
+  },
+  "brandPolicy": {
+    "defaultEnabled": true,
+    "userOverrideAllowed": true
+  },
+  "inputHandling": {
+    "preserveNativeOutput": true,
+    "ratioTolerance": 0.002,
+    "outputCanvasRole": "design-coordinate-system",
+    "allowPostGenerationResize": false,
+    "allowCrop": false,
+    "allowPadding": false,
+    "allowRotation": false,
+    "allowWrongRatioStretch": false,
+    "wrongRatioAction": "regenerate"
+  },
+  "generationConstraints": {
+    "forbidModelDrawnBrand": true,
+    "forbidPageNumberBadge": true,
+    "keepBrandReservedAreaClear": true,
+    "requireWarmYellowOuterField": true,
+    "requireSoftWhiteGridPaper": true,
+    "requireHeavyDisplayHierarchy": true,
+    "requireShallowCollageTexture": true,
+    "requireStructureSpecificComposition": true,
+    "forbidPhotorealisticPortraits": true,
+    "forbidSourceReconstruction": true,
+    "forbidGlossy3D": true,
+    "forbidDarkCyberpunkMood": true,
+    "avoidDenseParagraphs": true
+  },
+  "styleReference": {
+    "image": "assets/style-references/xhs-vibrant-scrapbook.png",
+    "usage": "QA and failure review only; do not use as generation input or copy its content.",
+    "contentPolicy": "Ignore semantic content and identity. Compare only palette roles, hierarchy, paper-collage material, generic doodle language, spacing, and structure-sensitive composition. Production branding is controlled only by fixedComponents.brandSlot.",
+    "isGenerationInput": false
+  }
+}

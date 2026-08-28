@@ -15,7 +15,8 @@ const cases = [
   ["references/styles/xhs-style-orange-card.spec.json", "1152x1536", "3:4"],
   ["references/styles/zhihu-style-title.spec.json", "2048x1152", "16:9"],
   ["references/styles/weibo-signal-core.spec.json", "1152x1536", "3:4"],
-  ["references/styles/toutiao-luminous-tech.spec.json", "2048x1152", "16:9"]
+  ["references/styles/toutiao-luminous-tech.spec.json", "2048x1152", "16:9"],
+  ["references/styles/xhs-vibrant-scrapbook.spec.json", "1152x1536", "3:4"]
 ];
 
 function resolveGeometry(specPath, model = "gpt-image-2") {

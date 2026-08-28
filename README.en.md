@@ -30,7 +30,7 @@ A stable content-illustration workflow for WeChat official accounts, Xiaohongshu
 
 ## Registered styles
 
-The registry currently contains seven styles across five platforms:
+The registry currently contains eight styles across five platforms:
 
 | Platform | `style_id` | Default ratio | Purpose |
 |---|---|---:|---|
@@ -38,6 +38,7 @@ The registry currently contains seven styles across five platforms:
 | Xiaohongshu | `xhs-explainer-notebook` | 3:4 | Notebook explainers and carousels; platform default |
 | Xiaohongshu | `xhs-cream-paper` | 3:4 | Cream-paper hand-drawn infographics |
 | Xiaohongshu | `xhs-orange-card` | 3:4 | Warm orange torn-paper knowledge cards |
+| Xiaohongshu | `xhs-vibrant-scrapbook` | 3:4 | Vibrant scrapbook explainers, processes, and checklists |
 | Zhihu | `zhihu-tech` | 16:9 | Modern technical infographics |
 | Weibo | `weibo-signal-core` | 3:4 | Dark red-signal technical concepts and process explainers |
 | Toutiao | `toutiao-luminous-tech` | 16:9 | Luminous technical flows and mechanism explainers |

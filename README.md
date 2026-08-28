@@ -30,7 +30,7 @@ prompt_examples:
 
 ## 已注册模板
 
-当前共有 5 个渠道、7 套模板：
+当前共有 5 个渠道、8 套模板：
 
 | 渠道 | `style_id` | 默认比例 | 用途 |
 |---|---|---:|---|
@@ -38,6 +38,7 @@ prompt_examples:
 | 小红书 | `xhs-explainer-notebook` | 3:4 | 手账科普封面与轮播，渠道默认模板 |
 | 小红书 | `xhs-cream-paper` | 3:4 | 奶油纸手绘信息图 |
 | 小红书 | `xhs-orange-card` | 3:4 | 暖橙撕纸知识卡 |
+| 小红书 | `xhs-vibrant-scrapbook` | 3:4 | 活力手帐拼贴概念、流程与清单图解 |
 | 知乎 | `zhihu-tech` | 16:9 | 现代科技信息图 |
 | 微博 | `weibo-signal-core` | 3:4 | 黑底红光科技概念与流程图解 |
 | 头条号 | `toutiao-luminous-tech` | 16:9 | 明亮科技流程与机制图解 |

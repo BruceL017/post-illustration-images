@@ -31,7 +31,8 @@ const styleSpecPaths = [
   "references/styles/xhs-style-orange-card.spec.json",
   "references/styles/zhihu-style-title.spec.json",
   "references/styles/weibo-signal-core.spec.json",
-  "references/styles/toutiao-luminous-tech.spec.json"
+  "references/styles/toutiao-luminous-tech.spec.json",
+  "references/styles/xhs-vibrant-scrapbook.spec.json"
 ].map((path) => resolve(skillRoot, path));
 
 function crc32(buffer) {
