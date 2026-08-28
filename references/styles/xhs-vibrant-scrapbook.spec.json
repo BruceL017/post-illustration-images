@@ -35,29 +35,10 @@
       "y": 96,
       "width": 920,
       "height": 1248
-    },
-    "brandReservedArea": {
-      "x": 842,
-      "y": 44,
-      "width": 208,
-      "height": 90
     }
   },
   "fixedComponents": {
-    "pageNumberBadge": false,
-    "brandSlot": {
-      "enabled": true,
-      "anchor": "top-right",
-      "x": 872,
-      "y": 64,
-      "width": 148,
-      "height": 40,
-      "assetFit": "contain"
-    }
-  },
-  "brandPolicy": {
-    "defaultEnabled": false,
-    "userOverrideAllowed": true
+    "pageNumberBadge": false
   },
   "inputHandling": {
     "preserveNativeOutput": true,
@@ -71,9 +52,7 @@
     "wrongRatioAction": "regenerate"
   },
   "generationConstraints": {
-    "forbidModelDrawnBrand": true,
     "forbidPageNumberBadge": true,
-    "keepBrandReservedAreaClear": true,
     "requireWarmYellowOuterField": true,
     "requireSoftWhiteGridPaper": true,
     "requireHeavyDisplayHierarchy": true,
@@ -88,7 +67,7 @@
   "styleReference": {
     "image": "assets/style-references/xhs-vibrant-scrapbook.png",
     "usage": "QA and failure review only; do not use as generation input or copy its content.",
-    "contentPolicy": "Ignore semantic content and identity. Compare only palette roles, hierarchy, paper-collage material, generic doodle language, spacing, and structure-sensitive composition. Production branding is controlled only by fixedComponents.brandSlot.",
+    "contentPolicy": "Ignore semantic content and identity. Compare only palette roles, hierarchy, paper-collage material, generic doodle language, spacing, and structure-sensitive composition.",
     "isGenerationInput": false
   }
 }

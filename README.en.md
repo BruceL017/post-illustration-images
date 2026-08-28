@@ -6,27 +6,27 @@ prompt_examples:
     scene: Create a Xiaohongshu set
   - prompt: Use weibo-signal-core to make a vertical technical explainer for this Weibo post.
     scene: Use a selected style
-  - prompt: Apply the brand logo to the existing 01-cover without regenerating it.
-    scene: Brand an existing image
-  - prompt: Disable branding and keep the model's original output.
-    scene: Disable the brand overlay
+  - prompt: Restore the existing 01-cover without regenerating it.
+    scene: Restore an existing image
+  - prompt: Add one summary image using the current style.
+    scene: Continue with one image
 ---
 
 [中文](./README.md) | English
 
 # Post Illustration Images
 
-A stable content-illustration workflow for WeChat official accounts, Xiaohongshu, Zhihu, Weibo, and Toutiao. It reads the source content before selecting a registered style, building a shot list, generating one image at a time, and validating geometry and quality. Brand overlay is off by default and runs only when explicitly enabled.
+A stable content-illustration workflow for WeChat official accounts, Xiaohongshu, Zhihu, Weibo, and Toutiao. It reads the source content before selecting a registered style, building a shot list, generating one image at a time, and validating geometry and quality.
 
 ## Core capabilities
 
 - **Content-driven planning**: analyzes the source first, then selects content anchors and expression structures; each image carries one core meaning.
-- **Managed styles**: one `style_spec` controls the full set, while the registry owns platform routing, aspect ratio, colors, layout, safe areas, and brand slots.
+- **Managed styles**: one `style_spec` controls the full set, while the registry owns platform routing, aspect ratio, colors, layout, safe areas, and fixed components.
 - **One image at a time**: compiles, generates, and validates a separate prompt for every image instead of asking the model for a complete carousel.
-- **Optional deterministic branding**: forbids model-drawn logos, watermarks, and page badges; when explicitly enabled with a valid SVG configuration, the bundled `resvg-wasm@2.6.2` renderer overlays that asset.
+- **Single image artifact**: accepted images go directly under `images/` with their native extensions and no duplicate copy.
 - **Native pixel preservation**: accepted images are not cropped, padded, stretched, upscaled, or forced to the Style Spec's design dimensions.
-- **Targeted continuation**: can apply a logo, restore a source, regenerate one image, or append one image without rebuilding the whole set.
-- **Orchestrator contract support**: can act as the `illustration-v1` provider for `content-production-provider/v1`, with strict path, hash, and artifact allowlist enforcement in plan or generate mode.
+- **Targeted continuation**: can restore a source, regenerate one image, or append one image without rebuilding the whole set.
+- **Orchestrator contract support**: can act as the `illustration-v2` provider for `content-production-provider/v1`, with strict path, hash, and artifact allowlist enforcement in plan or generate mode.
 
 ## Registered styles
 
@@ -54,13 +54,13 @@ The modes never fall back into each other. An invalid or conflicting provider re
 
 ## Workflow
 
-1. Resolve the platform, source content, output type, image ceiling, and branding preference.
+1. Resolve the platform, source content, output type, and image ceiling.
 2. Preflight a runtime-native image tool or an already-configured API backend.
 3. Analyze the content, select a registered platform style, and resolve the `gpt-image-2` request geometry.
 4. Select content anchors, save `shot-list.md`, and compile one prompt per image.
 5. Generate and validate one image at a time, using the first image as a canary before continuing.
-6. Keep the backend artifact directly by default; only when branding is explicitly enabled with a valid asset configuration, overlay the logo on the same-dimension PNG source.
-7. Complete content, style, brand, geometry, and set-level QA, then write `manifest.md`.
+6. Save the accepted backend artifact directly with its native extension.
+7. Complete content, style, originality, geometry, and set-level QA, then write `manifest.md`.
 
 ## Output structure
 
@@ -72,12 +72,11 @@ post-illustration-output/<content-slug>/
 ├── prompts/
 │   └── 01-cover.md
 ├── images/
-│   ├── unbranded/   # PNG sources when branding is enabled
-│   └── branded/     # same-dimension branded deliverables
+│   └── 01-cover.<native-ext>
 └── manifest.md
 ```
 
-When branding is disabled, accepted images are written directly under `images/` with their native extension and no redundant re-encoded copy.
+Accepted images are written directly under `images/` with their native extension and no redundant re-encoded copy.
 
 Orchestrated mode writes only the request's authorized `expected_artifacts`. It uses `plan.json`, `shot-list.md`, `bundle.json`, the native `manifest.md`, prompts, and images, with SHA-256 lineage across the final draft, title selection, approved plan, and delivered artifacts.
 
@@ -85,18 +84,16 @@ Orchestrated mode writes only the request's authorized `expected_artifacts`. It 
 
 - Requires a verifiable runtime-native image tool or an API image backend already configured in the current environment.
 - The bundled geometry profile applies only to a verified, available `gpt-image-2` channel and is never reused for another model.
-- Explicitly enabled branding requires a valid `brand-overlay.config.json` or `--brand-svg`, plus Node.js 22+. The renderer is vendored, so runtime `npm install`, a native SVG tool, and an additional API key are not required.
-- Pure photography, portrait retouching, product renders, photoreal brand campaigns, and images requiring exact long-form text are out of scope.
+- Pure photography, portrait retouching, product renders, photoreal campaigns, and images requiring exact long-form text are out of scope.
 - A requested image count is a target or ceiling, not a quota; the workflow does not invent filler images when the content lacks enough anchors.
-- A `style_reference` is used for QA only. It is never a generation input, and its topic, copy, logo, or exact layout must not be reproduced.
+- A `style_reference` is used for QA only. It is never a generation input, and its topic, copy, source identity, or exact layout must not be reproduced.
 
 ## Local maintenance
 
-The repository has no runtime npm installation step. After changing styles or branding behavior, run the same checks used by CI:
+The repository has no runtime npm installation step. After changing styles or contracts, run the same checks used by CI:
 
 ```bash
-node --test scripts/test-brand-overlay.mjs
-node --test tests/brand-policy.test.mjs tests/generation-geometry.test.mjs tests/style-bundle.test.mjs
+node --test tests/generation-geometry.test.mjs tests/style-bundle.test.mjs
 node --test tests/provider-contract.test.mjs
 node scripts/validate-style-bundle.mjs --installed
 ```
@@ -107,8 +104,5 @@ Key directories:
 - `references/styles/`: human-readable styles and machine-readable Style Specs
 - `references/style-registry.json`: platform and style registry
 - `references/orchestrated-provider.md`: orchestrated provider contract
-- `scripts/`: style validation, geometry resolution, and brand-overlay tools
-- `vendor/resvg-wasm/`: pinned WASM renderer
+- `scripts/`: style validation, geometry resolution, and provider contract tools
 - `assets/style-references/`: long-lived QA reference images
-
-See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for third-party components and licensing notices.

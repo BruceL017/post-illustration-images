@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  appendFile,
   copyFile,
   lstat,
   mkdir,
@@ -21,14 +20,14 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = join(ROOT, "scripts/provider-contract.mjs");
 const CONTRACT = "content-production-provider/v1";
-const PROVIDER = "illustration-v1";
+const PROVIDER = "illustration-v2";
 const SELECTION_KEYS = [
   "platform", "variant", "title_id", "title", "topic_phrase", "draft_path",
   "draft_sha256", "decision_rule"
 ];
 const PLAN_KEYS = [
   "schema_version", "task_id", "status", "platform", "provider_platform", "variant",
-  "source", "selection", "options", "analysis", "style", "brand", "generation_backend",
+  "source", "selection", "options", "analysis", "style", "generation_backend",
   "generation_geometry", "image_count", "anchors", "shot_list", "residual_risk"
 ];
 const ANCHOR_KEYS = [
@@ -37,14 +36,14 @@ const ANCHOR_KEYS = [
 ];
 const BUNDLE_KEYS = [
   "schema_version", "task_id", "status", "platform", "provider_platform", "variant",
-  "source", "selection", "plan", "shot_list", "style", "brand", "generation_backend",
+  "source", "selection", "plan", "shot_list", "style", "generation_backend",
   "generation_geometry", "image_count", "manifest", "images", "residual_risk"
 ];
 const IMAGE_KEYS = [
-  "image_id", "file", "file_sha256", "source_file", "source_sha256", "prompt_path",
+  "image_id", "file", "file_sha256", "prompt_path",
   "prompt_sha256", "placement", "core_meaning", "structure", "visual_metaphor",
-  "content_qa_status", "style_qa_status", "brand_qa_status", "set_qa_status",
-  "brand_overlay_status", "size_check_status", "generation_attempt", "requested_dimensions",
+  "content_qa_status", "style_qa_status", "set_qa_status", "size_check_status",
+  "generation_attempt", "requested_dimensions",
   "source_dimensions", "source_aspect_ratio", "source_artifact", "delivery_dimensions",
   "delivery_artifact", "native_output_preserved", "post_generation_actions",
   "geometry_attempts", "residual_risk"
@@ -121,13 +120,6 @@ function styleData(platform) {
         style_spec: "references/styles/toutiao-luminous-tech.spec.json",
         style_reference: "assets/style-references/toutiao-luminous-tech.png"
       },
-      brand: {
-        enabled: false,
-        policy_default_enabled: false,
-        override: null,
-        policy_source: "style-default",
-        disabled_reason: "disabled-by-style-default"
-      },
       geometry: {
         geometry_profile: "gpt-image-2-v1",
         resolved_model: "gpt-image-2",
@@ -151,13 +143,6 @@ function styleData(platform) {
       style_file: "references/styles/wechat-style-doodle.md",
       style_spec: "references/styles/wechat-style-doodle.spec.json",
       style_reference: "assets/style-references/wechat-doodle.png"
-    },
-    brand: {
-      enabled: false,
-      policy_default_enabled: false,
-      override: null,
-      policy_source: "style-default",
-      disabled_reason: "disabled-by-style-default"
     },
     geometry: {
       geometry_profile: "gpt-image-2-v1",
@@ -183,7 +168,6 @@ function options(platform) {
     publishing_path: null,
     style_id: null,
     max_images: 2,
-    brand_override: null,
     backend_hint: "configured-api",
     model_preference: null,
     execution_strategy: "one_image_at_a_time"
@@ -240,7 +224,7 @@ async function fixture(t, { platform = "wechat", attempt = 1 } = {}) {
   const input = { role: "final_draft", path: sourcePath, sha256: await digest(sourceFile) };
   const titleInput = { role: "title_selection", path: selectionPath, sha256: await digest(selectionFile) };
   const request = {
-    schema_version: 1,
+    schema_version: 2,
     contract: CONTRACT,
     task_id: `illustration:${runId}:${platform}:${variant}:plan:attempt-${String(attempt).padStart(3, "0")}`,
     capability: "illustration",
@@ -280,7 +264,7 @@ async function writePlan(data, mutate) {
   const shot = `---\nartifact: IllustrationShotList\nstatus: READY\ntask_id: ${data.request.task_id}\n---\n\n# 配图镜头表\n\n## ${anchor.image_id}\n\n- Placement or sequence: ${anchor.placement}\n- One core meaning: ${anchor.core_meaning}\n- Content expression structure: ${anchor.structure}\n- Visual metaphor: ${anchor.visual_metaphor}\n- Main actor/object action: ${anchor.main_action}\n- Suggested elements: ${anchor.suggested_elements.join(", ")}\n- Short labels: ${anchor.short_labels.join(", ")}\n- QA risk: ${anchor.qa_risk}\n`;
   const shotPath = await put(data.runDir, data.pathSet.shot, shot);
   const plan = {
-    schema_version: 1,
+    schema_version: 2,
     task_id: data.request.task_id,
     status: "READY",
     platform: data.platform,
@@ -295,7 +279,6 @@ async function writePlan(data, mutate) {
       expression_need: "Decision tree"
     },
     style: style.style,
-    brand: style.brand,
     generation_backend: {
       kind: "configured-api",
       adapter: "runtime-configured-adapter",
@@ -338,12 +321,8 @@ async function promoteToGenerate(data, planData) {
   };
   const imageId = planData.plan.anchors[0].image_id;
   const prompt = `${pathSet.promptDir}/${imageId}.md`;
-  const finalImage = planData.plan.brand.enabled
-    ? `${pathSet.base}/images/branded${pathSet.imageVersion}/${imageId}.png`
-    : `${pathSet.base}/images${pathSet.imageVersion}/${imageId}.png`;
-  const sourceImage = planData.plan.brand.enabled
-    ? `${pathSet.base}/images/unbranded${pathSet.imageVersion}/${imageId}.png` : null;
-  request.expected_artifacts = [pathSet.bundle, pathSet.manifest, prompt, ...(sourceImage ? [sourceImage] : []), finalImage];
+  const finalImage = `${pathSet.base}/images${pathSet.imageVersion}/${imageId}.png`;
+  request.expected_artifacts = [pathSet.bundle, pathSet.manifest, prompt, finalImage];
   const requestPath = await put(data.runDir, pathSet.request, `${JSON.stringify(request, null, 2)}\n`);
   const state = JSON.parse(await readFile(join(data.runDir, "run.json"), "utf8"));
   state.gates.visual = {
@@ -355,73 +334,16 @@ async function promoteToGenerate(data, planData) {
     ]
   };
   await put(data.runDir, "run.json", `${JSON.stringify(state, null, 2)}\n`);
-  return { ...data, pathSet, request, requestPath, planData, prompt, finalImage, sourceImage };
+  return { ...data, pathSet, request, requestPath, planData, prompt, finalImage };
 }
 
-async function createConfiguredProviderRoot(t) {
-  const isolatedRoot = await mkdtemp(join(tmpdir(), "illustration-provider-configured-"));
-  t.after(() => rm(isolatedRoot, { recursive: true, force: true }));
-  const copiedFiles = [
-    "scripts/provider-contract.mjs",
-    "scripts/apply-brand-overlay.mjs",
-    "vendor/resvg-wasm/index.js",
-    "vendor/resvg-wasm/index_bg.wasm",
-    "references/style-registry.json",
-    "references/gpt-image-2-geometry.spec.json",
-    "references/styles/wechat-style-doodle.md",
-    "references/styles/wechat-style-doodle.spec.json",
-    "assets/style-references/wechat-doodle.png"
-  ];
-  for (const relativePath of copiedFiles) {
-    const target = join(isolatedRoot, relativePath);
-    await mkdir(dirname(target), { recursive: true });
-    await copyFile(join(ROOT, relativePath), target);
-  }
-  const assetPath = join(isolatedRoot, "assets/brand/configured.svg");
-  await mkdir(dirname(assetPath), { recursive: true });
-  await writeFile(
-    assetPath,
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><path fill="#4D7CFE" d="M2 2h16v6H2z"/></svg>\n`
-  );
-  await writeFile(join(isolatedRoot, "brand-overlay.config.json"), `${JSON.stringify({
-    schema_version: 1,
-    asset: {
-      path: "assets/brand/configured.svg",
-      sha256: await digest(assetPath)
-    }
-  }, null, 2)}\n`);
-  return {
-    providerScript: join(isolatedRoot, "scripts/provider-contract.mjs"),
-    overlayScript: join(isolatedRoot, "scripts/apply-brand-overlay.mjs"),
-    configPath: join(isolatedRoot, "brand-overlay.config.json"),
-    styleSpecPath: join(isolatedRoot, "references/styles/wechat-style-doodle.spec.json")
-  };
-}
-
-async function writeBundle(data, mutate, overlay = null) {
+async function writeBundle(data, mutate) {
   const imageId = data.planData.plan.anchors[0].image_id;
   const promptPath = await put(data.runDir, data.prompt, "Generate one boundary decision diagram. No logo, brand name, watermark, badge, or reserve box.\n");
-  if (data.sourceImage) {
-    await mkdir(dirname(join(data.runDir, data.sourceImage)), { recursive: true });
-    await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.sourceImage));
-  }
   await mkdir(dirname(join(data.runDir, data.finalImage)), { recursive: true });
-  if (data.sourceImage && overlay) {
-    const overlaid = await run([
-      "--style-spec", overlay.styleSpecPath,
-      "--brand-config", overlay.configPath,
-      "--input", join(data.runDir, data.sourceImage),
-      "--output", join(data.runDir, data.finalImage)
-    ], overlay.overlayScript);
-    assert.equal(overlaid.code, 0, overlaid.stderr || overlaid.stdout);
-  } else {
-    await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.finalImage));
-    if (data.sourceImage) await appendFile(join(data.runDir, data.finalImage), "brand-overlay");
-  }
+  await copyFile(join(ROOT, data.planData.style.raster), join(data.runDir, data.finalImage));
   const finalStat = await stat(join(data.runDir, data.finalImage));
-  const sourceStat = data.sourceImage ? await stat(join(data.runDir, data.sourceImage)) : finalStat;
   const dims = data.planData.style.dimensions;
-  const disabled = data.planData.plan.brand.disabled_reason;
   const manifestImagePath = relative(data.pathSet.base, data.finalImage).replaceAll("\\", "/");
   const manifest = `post_illustration_bundle:\n  platform: ${data.request.provider_platform}\n  style_id: ${data.planData.plan.style.id}\n  images:\n    - image_id: ${imageId}\n      file: ${manifestImagePath}\n`;
   const manifestPath = await put(data.runDir, data.pathSet.manifest, manifest);
@@ -430,8 +352,6 @@ async function writeBundle(data, mutate, overlay = null) {
     image_id: imageId,
     file: data.finalImage,
     file_sha256: await digest(join(data.runDir, data.finalImage)),
-    source_file: data.sourceImage,
-    source_sha256: data.sourceImage ? await digest(join(data.runDir, data.sourceImage)) : null,
     prompt_path: data.prompt,
     prompt_sha256: await digest(promptPath),
     placement: anchor.placement,
@@ -440,19 +360,17 @@ async function writeBundle(data, mutate, overlay = null) {
     visual_metaphor: anchor.visual_metaphor,
     content_qa_status: "pass",
     style_qa_status: "pass",
-    brand_qa_status: disabled || "pass",
     set_qa_status: "pass",
-    brand_overlay_status: data.sourceImage ? "applied" : disabled,
     size_check_status: "pass-native",
     generation_attempt: 1,
     requested_dimensions: data.planData.plan.generation_geometry.requested_dimensions,
     source_dimensions: dims,
     source_aspect_ratio: dims.width / dims.height,
-    source_artifact: { format: "png", bytes: sourceStat.size },
+    source_artifact: { format: "png", bytes: finalStat.size },
     delivery_dimensions: dims,
     delivery_artifact: { format: "png", bytes: finalStat.size, hard_limit_exporter: null },
     native_output_preserved: true,
-    post_generation_actions: data.sourceImage ? ["brand-overlay-native"] : [],
+    post_generation_actions: [],
     geometry_attempts: [{
       attempt: 1,
       requested_dimensions: data.planData.plan.generation_geometry.requested_dimensions,
@@ -462,7 +380,7 @@ async function writeBundle(data, mutate, overlay = null) {
     residual_risk: "none"
   };
   const bundle = {
-    schema_version: 1,
+    schema_version: 2,
     task_id: data.request.task_id,
     status: "PASS",
     platform: data.platform,
@@ -473,7 +391,6 @@ async function writeBundle(data, mutate, overlay = null) {
     plan: { path: data.request.inputs[2].path, sha256: data.request.inputs[2].sha256 },
     shot_list: { path: data.request.inputs[3].path, sha256: data.request.inputs[3].sha256 },
     style: data.planData.plan.style,
-    brand: data.planData.plan.brand,
     generation_backend: { ...data.planData.plan.generation_backend, process_cleanup_status: "pass" },
     generation_geometry: data.planData.plan.generation_geometry,
     image_count: 1,
@@ -488,7 +405,7 @@ async function writeBundle(data, mutate, overlay = null) {
 
 test("skill advertises the illustration provider without replacing standalone routing", async () => {
   const skill = await readFile(join(ROOT, "SKILL.md"), "utf8");
-  assert.match(skill, /content-production-provider: illustration-v1/);
+  assert.match(skill, /content-production-provider: illustration-v2/);
   assert.match(skill, /references\/orchestrated-provider\.md/);
   assert.match(skill, /post-illustration-output\/<content-slug>\//);
 });
@@ -498,85 +415,38 @@ test("plan validates and finalizes exactly plan plus shot list without touching 
   const sourceHash = await digest(data.sourceFile);
   const validated = await run(["validate-request", data.requestPath]);
   assert.equal(validated.code, 0, validated.stderr || validated.stdout);
+  assert.equal(data.request.schema_version, 2);
+  assert.equal(data.request.provider_contract, "illustration-v2");
   const { plan } = await writePlan(data);
+  assert.equal(plan.schema_version, 2);
   sameKeys(plan, PLAN_KEYS);
   sameKeys(plan.selection, SELECTION_KEYS);
   sameKeys(plan.anchors[0], ANCHOR_KEYS);
   const finalized = await run(["finalize", data.requestPath]);
   assert.equal(finalized.code, 0, finalized.stderr || finalized.stdout);
   assert.equal(finalized.json.status, "PASS");
+  assert.equal(finalized.json.schema_version, 2);
+  assert.equal(finalized.json.provider_contract, "illustration-v2");
   sameKeys(finalized.json, RESULT_KEYS);
   assert.deepEqual(finalized.json.artifacts.map((item) => item.role), ["illustration_plan", "shot_list"]);
   assert.equal(await digest(data.sourceFile), sourceHash);
 });
 
-test("explicit enablement blocks when the fixed skill config has no asset", async (t) => {
-  const data = await fixture(t);
-  data.request.options.brand_override = "enabled";
-  await put(data.runDir, data.pathSet.request, `${JSON.stringify(data.request, null, 2)}\n`);
-  const validated = await run(["validate-request", data.requestPath]);
-  assert.equal(validated.code, 2);
-  assert.equal(validated.json.status, "BLOCKED");
-  assert.ok(validated.json.issues.some((item) => item.code === "required_brand_asset_unavailable"));
-});
+test("request exact keys reject illustration-v1 and legacy brand options", async (t) => {
+  const legacyOption = await fixture(t);
+  legacyOption.request.options.brand_override = null;
+  await put(legacyOption.runDir, legacyOption.pathSet.request, `${JSON.stringify(legacyOption.request, null, 2)}\n`);
+  const optionResult = await run(["validate-request", legacyOption.requestPath]);
+  assert.equal(optionResult.code, 2);
+  assert.ok(optionResult.json.issues.some((item) => item.code === "invalid_provider_request"));
 
-test("explicit enablement validates and finalizes the complete illustration-v1 flow", async (t) => {
-  const data = await fixture(t);
-  data.request.options.brand_override = "enabled";
-  await put(data.runDir, data.pathSet.request, `${JSON.stringify(data.request, null, 2)}\n`);
-  const configured = await createConfiguredProviderRoot(t);
-
-  const validated = await run(
-    ["validate-request", data.requestPath],
-    configured.providerScript
-  );
-  assert.equal(validated.code, 0, validated.stderr || validated.stdout);
-  assert.equal(validated.json.status, "PASS");
-
-  const planData = await writePlan(data, (plan) => {
-    plan.brand = {
-      enabled: true,
-      policy_default_enabled: false,
-      override: "enabled",
-      policy_source: "user-override",
-      disabled_reason: null
-    };
-  });
-  const planFinalized = await run(["finalize", data.requestPath], configured.providerScript);
-  assert.equal(planFinalized.code, 0, planFinalized.stderr || planFinalized.stdout);
-  assert.equal(planFinalized.json.status, "PASS");
-
-  const generated = await promoteToGenerate(data, planData);
-  const generateValidated = await run(["validate-request", generated.requestPath], configured.providerScript);
-  assert.equal(generateValidated.code, 0, generateValidated.stderr || generateValidated.stdout);
-  await writeBundle(generated);
-  const appendedOnly = await run(["finalize", generated.requestPath], configured.providerScript);
-  assert.equal(appendedOnly.code, 2);
-  assert.ok(appendedOnly.json.issues.some((item) => item.code === "invalid_illustration_brand"
-    && /pixel delta/i.test(item.message)));
-
-  const shiftedSpec = JSON.parse(await readFile(configured.styleSpecPath, "utf8"));
-  shiftedSpec.fixedComponents.brandSlot.x = shiftedSpec.layout.brandReservedArea.x;
-  shiftedSpec.fixedComponents.brandSlot.y = 90;
-  const shiftedSpecPath = join(dirname(configured.styleSpecPath), "shifted-brand-slot.spec.json");
-  await writeFile(shiftedSpecPath, `${JSON.stringify(shiftedSpec, null, 2)}\n`);
-  await writeBundle(generated, null, { ...configured, styleSpecPath: shiftedSpecPath });
-  const outsideSlot = await run(["finalize", generated.requestPath], configured.providerScript);
-  assert.equal(outsideSlot.code, 2);
-  assert.ok(outsideSlot.json.issues.some((item) => item.code === "invalid_illustration_brand"
-    && /outside=[1-9][0-9]*/i.test(item.message)));
-
-  const { bundle } = await writeBundle(generated, null, configured);
-  assert.equal(bundle.brand.enabled, true);
-  assert.equal(bundle.images[0].brand_overlay_status, "applied");
-  assert.deepEqual(bundle.images[0].post_generation_actions, ["brand-overlay-native"]);
-
-  const generateFinalized = await run(["finalize", generated.requestPath], configured.providerScript);
-  assert.equal(generateFinalized.code, 0, generateFinalized.stderr || generateFinalized.stdout);
-  assert.equal(generateFinalized.json.status, "PASS");
-  assert.deepEqual(generateFinalized.json.artifacts.map((item) => item.role), [
-    "illustration_bundle", "native_manifest", "prompt", "source_image", "delivery_image"
-  ]);
+  const legacyContract = await fixture(t);
+  legacyContract.request.schema_version = 1;
+  legacyContract.request.provider_contract = "illustration-v1";
+  await put(legacyContract.runDir, legacyContract.pathSet.request, `${JSON.stringify(legacyContract.request, null, 2)}\n`);
+  const contractResult = await run(["validate-request", legacyContract.requestPath]);
+  assert.equal(contractResult.code, 2);
+  assert.ok(contractResult.json.issues.some((item) => item.code === "invalid_provider_request"));
 });
 
 test("request validation rejects extra inputs, wrong aliases, stale attempts, and symlink inputs", async (t) => {
@@ -614,6 +484,29 @@ test("request validation rejects extra inputs, wrong aliases, stale attempts, an
   assert.ok(linkedResult.json.issues.some((item) => item.code === "provider_input_symlink"));
 });
 
+test("generate request rejects legacy source roles and old image paths", async (t) => {
+  const legacyRole = await generateFixture(t);
+  legacyRole.request.inputs.push({
+    role: "source_image",
+    path: legacyRole.request.inputs[0].path,
+    sha256: legacyRole.request.inputs[0].sha256
+  });
+  await put(legacyRole.runDir, legacyRole.pathSet.request, `${JSON.stringify(legacyRole.request, null, 2)}\n`);
+  const roleResult = await run(["validate-request", legacyRole.requestPath]);
+  assert.equal(roleResult.code, 2);
+  assert.ok(roleResult.json.issues.some((item) => item.code === "invalid_provider_inputs"));
+
+  const legacyPath = await generateFixture(t);
+  legacyPath.request.expected_artifacts.push(
+    `${legacyPath.pathSet.base}/images/unbranded/01-boundary.png`,
+    `${legacyPath.pathSet.base}/images/branded/01-boundary.png`
+  );
+  await put(legacyPath.runDir, legacyPath.pathSet.request, `${JSON.stringify(legacyPath.request, null, 2)}\n`);
+  const pathResult = await run(["validate-request", legacyPath.requestPath]);
+  assert.equal(pathResult.code, 2);
+  assert.ok(pathResult.json.issues.some((item) => item.code === "invalid_expected_artifacts"));
+});
+
 test("plan finalization rejects generated images, filler counts, stale shot hashes, and residual risk", async (t) => {
   const data = await fixture(t);
   await writePlan(data, async (plan) => {
@@ -621,7 +514,7 @@ test("plan finalization rejects generated images, filler counts, stale shot hash
     plan.residual_risk = "low";
     plan.shot_list.sha256 = "f".repeat(64);
   });
-  await put(data.runDir, `${data.pathSet.base}/images/unbranded/01-boundary.png`, "not allowed in plan mode");
+  await put(data.runDir, `${data.pathSet.base}/images/01-boundary.png`, "not allowed in plan mode");
   const finalized = await run(["finalize", data.requestPath]);
   assert.equal(finalized.code, 2);
   for (const code of ["illustration_count_exceeds_max", "illustration_lineage_drift", "illustration_residual_risk", "plan_contains_generated_assets"]) {
@@ -629,12 +522,36 @@ test("plan finalization rejects generated images, filler counts, stale shot hash
   }
 });
 
-test("generate finalizes exact default-off prompts, deliveries, native manifest, and bundle", async (t) => {
+test("plan and bundle exact keys reject legacy brand and source fields", async (t) => {
+  const planData = await fixture(t);
+  await writePlan(planData, (plan) => {
+    plan.brand = { enabled: false };
+  });
+  const planResult = await run(["finalize", planData.requestPath]);
+  assert.equal(planResult.code, 2);
+  assert.ok(planResult.json.issues.some((item) => item.code === "invalid_illustration_plan"));
+
+  const bundleData = await generateFixture(t);
+  await writeBundle(bundleData, (bundle) => {
+    bundle.brand = { enabled: false };
+    bundle.images[0].source_file = null;
+    bundle.images[0].source_sha256 = null;
+    bundle.images[0].brand_qa_status = "disabled";
+    bundle.images[0].brand_overlay_status = "disabled";
+  });
+  const bundleResult = await run(["finalize", bundleData.requestPath]);
+  assert.equal(bundleResult.code, 2);
+  assert.ok(bundleResult.json.issues.some((item) =>
+    ["invalid_illustration_bundle", "invalid_illustration_image"].includes(item.code)));
+});
+
+test("generate finalizes exact single-directory prompts, deliveries, native manifest, and bundle", async (t) => {
   const data = await generateFixture(t);
   const sourceHash = await digest(data.sourceFile);
   const validated = await run(["validate-request", data.requestPath]);
   assert.equal(validated.code, 0, validated.stderr || validated.stdout);
   const { bundle } = await writeBundle(data);
+  assert.equal(bundle.schema_version, 2);
   sameKeys(bundle, BUNDLE_KEYS);
   sameKeys(bundle.images[0], IMAGE_KEYS);
   const finalized = await run(["finalize", data.requestPath]);
@@ -647,17 +564,18 @@ test("generate finalizes exact default-off prompts, deliveries, native manifest,
   assert.equal(await digest(data.sourceFile), sourceHash);
 });
 
-test("generate accepts brand-disabled versioned output for the current attempt", async (t) => {
+test("generate accepts versioned single-directory output for the current attempt", async (t) => {
   const data = await generateFixture(t, { platform: "toutiao", attempt: 2 });
   assert.match(data.pathSet.bundle, /bundle\.v002\.json$/);
   assert.match(data.prompt, /prompts\/v002\//);
   assert.match(data.finalImage, /images\/v002\//);
-  assert.equal(data.sourceImage, null);
   await writeBundle(data);
   const finalized = await run(["finalize", data.requestPath]);
   assert.equal(finalized.code, 0, finalized.stderr || finalized.stdout);
   assert.equal(finalized.json.status, "PASS");
-  assert.ok(!finalized.json.artifacts.some((item) => item.role === "source_image"));
+  assert.deepEqual(finalized.json.artifacts.map((item) => item.role), [
+    "illustration_bundle", "native_manifest", "prompt", "delivery_image"
+  ]);
 });
 
 test("generate rejects ID, hash, geometry, QA, retry, and residual-risk drift", async (t) => {
@@ -697,6 +615,16 @@ test("generate rejects an undeclared current-attempt prompt or image", async (t)
   const data = await generateFixture(t);
   await writeBundle(data);
   await put(data.runDir, `${data.pathSet.promptDir}/99-extra.md`, "undeclared prompt\n");
+  const finalized = await run(["finalize", data.requestPath]);
+  assert.equal(finalized.code, 2);
+  assert.ok(finalized.json.issues.some((item) => item.code === "unexpected_illustration_artifact"));
+});
+
+test("generate rejects legacy branded and unbranded directories", async (t) => {
+  const data = await generateFixture(t);
+  await writeBundle(data);
+  await put(data.runDir, `${data.pathSet.base}/images/unbranded/01-boundary.png`, "legacy source");
+  await put(data.runDir, `${data.pathSet.base}/images/branded/01-boundary.png`, "legacy delivery");
   const finalized = await run(["finalize", data.requestPath]);
   assert.equal(finalized.code, 2);
   assert.ok(finalized.json.issues.some((item) => item.code === "unexpected_illustration_artifact"));

@@ -38,11 +38,11 @@ Use bright diffuse studio light, very subtle paper or matte grain, pale contact 
 
 ## Platform Geometry
 
-Use 1600 x 900 only as the Toutiao design coordinate system. Preserve any accepted native 16:9 raster within ratio tolerance `0.002`, including 1672 x 941, and require a shortest edge of at least 900px. Keep meaningful content inside the proportionally mapped `x=80, y=70, w=1440, h=760` area. A valid top-right brand slot remains in the spec, but branding defaults off, so its reserved area is inactive unless the user explicitly enables branding.
+Use 1600 x 900 only as the Toutiao design coordinate system. Preserve any accepted native 16:9 raster within ratio tolerance `0.002`, including 1672 x 941, and require a shortest edge of at least 900px. Keep meaningful content inside the proportionally mapped `x=80, y=70, w=1440, h=760` area.
 
-## Debranding And Prohibitions
+## Identity And Source Prohibitions
 
-Generalize exact colors, coordinates, icon silhouettes, and typography identity. Never use or reconstruct the source logo, brand name, headline, topic, brain object, four-node sequence, exact composition, or proprietary assets. Never pass the source image or the selected style reference to an image model. No logo, watermark, model signature, fake brand, page number, placeholder, or visible reserved-area marker.
+Generalize exact colors, coordinates, icon silhouettes, and typography identity. Never reconstruct the source headline, topic, brain object, four-node sequence, exact composition, or proprietary assets. Never pass the source image or the selected style reference to an image model. Do not add page numbers, placeholders, or visible reserved-area markers.
 
 ## Calibration Guidance
 

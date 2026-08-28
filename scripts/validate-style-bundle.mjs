@@ -31,9 +31,7 @@ export const PLATFORM_BASELINES = Object.freeze({
     height: 1200,
     ratio: "4:3",
     orientation: "horizontal",
-    contentSafeArea: Object.freeze({ x: 80, y: 80, width: 1440, height: 1040 }),
-    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
-    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+    contentSafeArea: Object.freeze({ x: 80, y: 80, width: 1440, height: 1040 })
   }),
   xhs: Object.freeze({
     specPlatform: "xiaohongshu",
@@ -41,9 +39,7 @@ export const PLATFORM_BASELINES = Object.freeze({
     height: 1440,
     ratio: "3:4",
     orientation: "vertical",
-    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 }),
-    brandReservedArea: Object.freeze({ x: 842, y: 44, width: 208, height: 90 }),
-    brandSlot: Object.freeze({ x: 872, y: 64, width: 148, height: 40 })
+    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 })
   }),
   zhihu: Object.freeze({
     specPlatform: "zhihu",
@@ -51,9 +47,7 @@ export const PLATFORM_BASELINES = Object.freeze({
     height: 900,
     ratio: "16:9",
     orientation: "horizontal",
-    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
-    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
-    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 })
   }),
   weibo: Object.freeze({
     specPlatform: "weibo",
@@ -61,9 +55,7 @@ export const PLATFORM_BASELINES = Object.freeze({
     height: 1440,
     ratio: "3:4",
     orientation: "vertical",
-    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 }),
-    brandReservedArea: Object.freeze({ x: 842, y: 44, width: 208, height: 90 }),
-    brandSlot: Object.freeze({ x: 872, y: 64, width: 148, height: 40 })
+    contentSafeArea: Object.freeze({ x: 80, y: 96, width: 920, height: 1248 })
   }),
   toutiao: Object.freeze({
     specPlatform: "toutiao",
@@ -73,9 +65,7 @@ export const PLATFORM_BASELINES = Object.freeze({
     orientation: "horizontal",
     sizing: "flexible",
     minShortEdge: 900,
-    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 }),
-    brandReservedArea: Object.freeze({ x: 1320, y: 44, width: 240, height: 100 }),
-    brandSlot: Object.freeze({ x: 1350, y: 64, width: 170, height: 46 })
+    contentSafeArea: Object.freeze({ x: 80, y: 70, width: 1440, height: 760 })
   })
 });
 
@@ -104,8 +94,7 @@ const hardGates = Object.freeze([
   "aspect_ratio",
   "safe_area",
   "single_core_meaning",
-  "identity_leakage",
-  "brand_free"
+  "identity_leakage"
 ]);
 const signalKeys = Object.freeze([
   "color_roles",
@@ -289,33 +278,9 @@ function rectEquals(actual, expected) {
   return ["x", "y", "width", "height"].every((key) => actual?.[key] === expected[key]);
 }
 
-function validateBrand(spec, candidatePolicy) {
-  const policy = spec.brandPolicy;
-  invariant(policy?.defaultEnabled === false, "style.spec.json brandPolicy.defaultEnabled must be false");
-  invariant(policy.userOverrideAllowed === true, "style.spec.json brandPolicy.userOverrideAllowed must be true");
-  if (candidatePolicy) {
-    invariant(candidatePolicy.defaultEnabled === policy.defaultEnabled, "candidate and spec brand defaults differ");
-    invariant(candidatePolicy.userOverrideAllowed === policy.userOverrideAllowed, "candidate and spec brand override policies differ");
-  }
-
-  const reserved = spec.layout?.brandReservedArea;
-  const slot = spec.fixedComponents?.brandSlot;
-  validateRect(reserved, "style.spec.json layout.brandReservedArea", spec.canvas);
-  validateRect(slot, "style.spec.json fixedComponents.brandSlot", spec.canvas);
-  invariant(slot.enabled === true, "style.spec.json brandSlot.enabled must remain true");
-  invariant(slot.anchor === "top-right", "style.spec.json brandSlot.anchor must be top-right");
-  invariant(slot.assetFit === "contain", "style.spec.json brandSlot.assetFit must be contain");
-  invariant(reserved.x >= spec.canvas.width / 2, "style.spec.json brandReservedArea must be in the right half");
-  invariant(reserved.y + reserved.height <= spec.canvas.height / 2, "style.spec.json brandReservedArea must be in the top half");
-  invariant(slot.x >= reserved.x && slot.y >= reserved.y, "style.spec.json brandSlot starts outside brandReservedArea");
-  invariant(slot.x + slot.width <= reserved.x + reserved.width, "style.spec.json brandSlot exceeds brandReservedArea width");
-  invariant(slot.y + slot.height <= reserved.y + reserved.height, "style.spec.json brandSlot exceeds brandReservedArea height");
-  invariant(spec.generationConstraints?.forbidModelDrawnBrand === true, "style.spec.json must forbid model-drawn branding");
-  invariant(spec.generationConstraints?.keepBrandReservedAreaClear === true, "style.spec.json must keep the brand area clear when active");
-}
-
 function validateSpec({ spec, style, baseline, enforceBaselineCanvas }) {
   invariant(spec?.id === style.id, "style.spec.json id must match candidate style.id");
+  invariant(!Object.hasOwn(spec, "brandPolicy"), "style.spec.json brandPolicy is not allowed");
   invariant(spec.platform === baseline.specPlatform, `style.spec.json platform must be ${baseline.specPlatform}`);
   invariant(spec.styleFile === `references/styles/${style.id}.md` || !enforceBaselineCanvas, `style.spec.json styleFile must be references/styles/${style.id}.md`);
 
@@ -332,14 +297,15 @@ function validateSpec({ spec, style, baseline, enforceBaselineCanvas }) {
 
   invariant(spec.layout && typeof spec.layout === "object", "style.spec.json layout is required");
   invariant(spec.layout.contentSafeArea, "style.spec.json layout.contentSafeArea is required");
+  invariant(!Object.hasOwn(spec.layout, "brandReservedArea"), "style.spec.json layout.brandReservedArea is not allowed");
+  invariant(!Object.hasOwn(spec.fixedComponents ?? {}, "brandSlot"), "style.spec.json fixedComponents.brandSlot is not allowed");
+  invariant(!Object.hasOwn(spec.generationConstraints ?? {}, "forbidModelDrawnBrand"), "style.spec.json generationConstraints.forbidModelDrawnBrand is not allowed");
+  invariant(!Object.hasOwn(spec.generationConstraints ?? {}, "keepBrandReservedAreaClear"), "style.spec.json generationConstraints.keepBrandReservedAreaClear is not allowed");
   for (const [name, rect] of Object.entries(spec.layout)) {
     validateRect(rect, `style.spec.json layout.${name}`, canvas);
   }
-  validateBrand(spec, style.brandPolicy);
   if (enforceBaselineCanvas) {
     invariant(rectEquals(spec.layout.contentSafeArea, baseline.contentSafeArea), "style.spec.json layout.contentSafeArea must match the platform baseline");
-    invariant(rectEquals(spec.layout.brandReservedArea, baseline.brandReservedArea), "style.spec.json layout.brandReservedArea must match the platform baseline");
-    invariant(rectEquals(spec.fixedComponents.brandSlot, baseline.brandSlot), "style.spec.json fixedComponents.brandSlot must match the platform baseline");
   }
 
   const handling = spec.inputHandling;
@@ -366,8 +332,10 @@ function validateSpec({ spec, style, baseline, enforceBaselineCanvas }) {
 
 function validateGates(gates, label) {
   invariant(gates && typeof gates === "object", `${label} is required`);
+  invariant(!Object.hasOwn(gates, "brand_free"), `${label}.brand_free is not allowed`);
   for (const gate of hardGates) {
-    invariant(gates[gate] === true, `${label}.${gate} must be true`);
+    const scope = gate === "identity_leakage" ? "; covers logo, watermark, and signature leakage" : "";
+    invariant(gates[gate] === true, `${label}.${gate} must be true${scope}`);
   }
 }
 
@@ -451,7 +419,7 @@ function validateQa({ qa, bundleDir, canvas, ratioTolerance, minShortEdge, style
   const selected = byId.get(selection.image_id);
   invariant(selection.source_image === selected.image.file, "qa.json selected_reference.source_image does not match the selected image");
   invariant(selection.path === candidateFiles.styleReference, `qa.json selected_reference.path must be ${candidateFiles.styleReference}`);
-  invariant(selection.unbranded === true, "qa.json selected_reference.unbranded must be true");
+  invariant(!Object.hasOwn(selection, "unbranded"), "qa.json selected_reference.unbranded is not allowed");
   const ranked = calibrationIds
     .map((id, order) => ({ id, order, score: byId.get(id).image.total_score }))
     .sort((left, right) => right.score - left.score || left.order - right.order);
@@ -591,7 +559,7 @@ function validateCandidateAgainstRegistry(candidate, registry) {
 }
 
 function validateCandidate(candidate) {
-  invariant(candidate?.schemaVersion === 1, "candidate.json schemaVersion must be 1");
+  invariant(candidate?.schemaVersion === 2, "candidate.json schemaVersion must be 2");
   invariant(candidate.status === "approved", "candidate.json status must be approved");
   invariant(candidate.template_ready === true, "candidate.json template_ready must be true");
   invariant(candidate.humanApproval?.status === "approved", "candidate.json humanApproval.status must be approved");
@@ -604,8 +572,7 @@ function validateCandidate(candidate) {
   invariant(PLATFORM_BASELINES[style.platform], "candidate.json style.platform is unsupported");
   invariant(style.makeDefault === undefined || typeof style.makeDefault === "boolean", "candidate.json style.makeDefault must be boolean when present");
   validateAliases(style.aliases, "candidate style.aliases");
-  invariant(style.brandPolicy?.defaultEnabled === false, "candidate.json style.brandPolicy.defaultEnabled must be false");
-  invariant(style.brandPolicy.userOverrideAllowed === true, "candidate.json style.brandPolicy.userOverrideAllowed must be true");
+  invariant(!Object.hasOwn(style, "brandPolicy"), "candidate.json style.brandPolicy is not allowed");
 
   invariant(candidate.files && typeof candidate.files === "object", "candidate.json files is required");
   for (const [key, expected] of Object.entries(candidateFiles)) {
@@ -712,10 +679,7 @@ export function validateInstalledRegistry({ skillRoot = defaultSkillRoot, regist
     }
 
     const spec = readJson(resolveSafePath(resolvedSkillRoot, entry.specFile, `Registry ${entry.id} specFile`), `Spec for ${entry.id}`);
-    const style = {
-      id: entry.id,
-      brandPolicy: spec.brandPolicy
-    };
+    const style = { id: entry.id };
     validateSpec({ spec, style, baseline, enforceBaselineCanvas: false });
     invariant(spec.styleFile === entry.styleFile, `Registry ${entry.id} styleFile differs from its spec`);
     invariant(spec.styleReference.image === entry.styleReference, `Registry ${entry.id} styleReference differs from its spec`);

@@ -1,4 +1,4 @@
-name: Brand Overlay
+name: Validation
 
 on:
   pull_request:
@@ -34,11 +34,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Run brand overlay regression tests
-        run: node --test scripts/test-brand-overlay.mjs
-
       - name: Run skill contract tests
-        run: node --test tests/brand-policy.test.mjs tests/generation-geometry.test.mjs tests/style-bundle.test.mjs tests/provider-contract.test.mjs
+        run: node --test tests/generation-geometry.test.mjs tests/style-bundle.test.mjs tests/provider-contract.test.mjs
 
       - name: Validate installed style registry
         run: node scripts/validate-style-bundle.mjs --installed

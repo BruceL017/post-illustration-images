@@ -7,22 +7,20 @@ This file routes platform requests to suite-level Style Specs.
 Important:
 
 - `references/style-registry.json` is the machine-readable source of truth for registered styles and routing metadata.
-- Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, component slots, and brand defaults.
+- Style files define visual language and content expression rules. Machine-readable specs define deterministic geometry, QA, colors, safe areas, and fixed components.
 - Style Spec canvas dimensions are design-coordinate geometry for target ratio and layout. Accepted model output pixels are preserved for delivery; request dimensions come from the verified generation geometry profile.
 - Style reference images are QA baselines only. They are never generation inputs and their semantic content must not be copied.
-- Brand resolution is: explicit user choice, then `brandPolicy.defaultEnabled`, then compatibility default `false` for an older spec without `brandPolicy`.
-- When branding resolves disabled, the brand area is not an active reservation, although every production spec retains valid top-right brand geometry.
 
-| Style ID | Platform | Style File | Machine Spec | Style Reference | Brand Plugin | Page Badges | Default Use |
-|---|---|---|---|---|---|---|---|
-| `wechat-doodle` | WeChat official account | `references/styles/wechat-style-doodle.md` | `references/styles/wechat-style-doodle.spec.json` | `assets/style-references/wechat-doodle.png` | spec default, user-overridable | disabled | Long article body illustrations, warm hand-drawn explainer set. |
-| `xhs-explainer-notebook` | Xiaohongshu | `references/styles/xhs-style-explainer-notebook.md` | `references/styles/xhs-style-explainer-notebook.spec.json` | `assets/style-references/xhs-explainer-notebook.png` | spec default, user-overridable | disabled | Vertical notebook-style science/explainer carousel images. |
-| `xhs-cream-paper` | Xiaohongshu | `references/styles/xhs-style-cream-paper.md` | `references/styles/xhs-style-cream-paper.spec.json` | `assets/style-references/xhs-cream-paper.png` | spec default, user-overridable | disabled | Warm cream-paper hand-drawn Xiaohongshu infographic base. |
-| `xhs-orange-card` | Xiaohongshu | `references/styles/xhs-style-orange-card.md` | `references/styles/xhs-style-orange-card.spec.json` | `assets/style-references/xhs-orange-card.png` | spec default, user-overridable | disabled | Warm orange torn-paper knowledge-card carousel style. |
-| `zhihu-tech` | Zhihu | `references/styles/zhihu-style-title.md` | `references/styles/zhihu-style-title.spec.json` | `assets/style-references/zhihu-tech.png` | spec default, user-overridable | disabled | Fixed 16:9 modern AI/SaaS/developer-tool infographic. |
-| `weibo-signal-core` | Weibo | `references/styles/weibo-signal-core.md` | `references/styles/weibo-signal-core.spec.json` | `assets/style-references/weibo-signal-core.png` | spec default, user-overridable | disabled | 微博竖版科技概念、流程机制、对比关系与检查清单图解。 |
-| `toutiao-luminous-tech` | Toutiao | `references/styles/toutiao-luminous-tech.md` | `references/styles/toutiao-luminous-tech.spec.json` | `assets/style-references/toutiao-luminous-tech.png` | spec default, user-overridable | disabled | 头条号科技概念、产品机制、流程解释与发布前检查配图。 |
-| `xhs-vibrant-scrapbook` | Xiaohongshu | `references/styles/xhs-vibrant-scrapbook.md` | `references/styles/xhs-vibrant-scrapbook.spec.json` | `assets/style-references/xhs-vibrant-scrapbook.png` | spec default, user-overridable | disabled | energetic explainers, processes, and checklists |
+| Style ID | Platform | Style File | Machine Spec | Style Reference | Page Badges | Default Use |
+|---|---|---|---|---|---|---|
+| `wechat-doodle` | WeChat official account | `references/styles/wechat-style-doodle.md` | `references/styles/wechat-style-doodle.spec.json` | `assets/style-references/wechat-doodle.png` | disabled | Long article body illustrations, warm hand-drawn explainer set. |
+| `xhs-explainer-notebook` | Xiaohongshu | `references/styles/xhs-style-explainer-notebook.md` | `references/styles/xhs-style-explainer-notebook.spec.json` | `assets/style-references/xhs-explainer-notebook.png` | disabled | Vertical notebook-style science/explainer carousel images. |
+| `xhs-cream-paper` | Xiaohongshu | `references/styles/xhs-style-cream-paper.md` | `references/styles/xhs-style-cream-paper.spec.json` | `assets/style-references/xhs-cream-paper.png` | disabled | Warm cream-paper hand-drawn Xiaohongshu infographic base. |
+| `xhs-orange-card` | Xiaohongshu | `references/styles/xhs-style-orange-card.md` | `references/styles/xhs-style-orange-card.spec.json` | `assets/style-references/xhs-orange-card.png` | disabled | Warm orange torn-paper knowledge-card carousel style. |
+| `zhihu-tech` | Zhihu | `references/styles/zhihu-style-title.md` | `references/styles/zhihu-style-title.spec.json` | `assets/style-references/zhihu-tech.png` | disabled | Fixed 16:9 modern AI/SaaS/developer-tool infographic. |
+| `weibo-signal-core` | Weibo | `references/styles/weibo-signal-core.md` | `references/styles/weibo-signal-core.spec.json` | `assets/style-references/weibo-signal-core.png` | disabled | 微博竖版科技概念、流程机制、对比关系与检查清单图解。 |
+| `toutiao-luminous-tech` | Toutiao | `references/styles/toutiao-luminous-tech.md` | `references/styles/toutiao-luminous-tech.spec.json` | `assets/style-references/toutiao-luminous-tech.png` | disabled | 头条号科技概念、产品机制、流程解释与发布前检查配图。 |
+| `xhs-vibrant-scrapbook` | Xiaohongshu | `references/styles/xhs-vibrant-scrapbook.md` | `references/styles/xhs-vibrant-scrapbook.spec.json` | `assets/style-references/xhs-vibrant-scrapbook.png` | disabled | energetic explainers, processes, and checklists |
 
 ## Platform Routing
 
@@ -79,6 +77,6 @@ If the platform is not stated and cannot be inferred from the source content, as
 | 头条号明亮科技 / 今日头条科技配图 / 高调科技 / 柔性3D流程 / luminous tech | `toutiao-luminous-tech` |
 | 活力手帐 / 高能拼贴 / vibrant scrapbook | `xhs-vibrant-scrapbook` |
 
-Do not preselect image count, aspect ratio, palette, safe area, brand geometry, page badges, or other fixed slots before selecting a style.
+Do not preselect image count, aspect ratio, palette, safe area, page badges, or other fixed components before selecting a style.
 
-Use each registered spec as the source of truth for scripts and QA. Use its Style Reference only for visual-system QA and failure review; ignore reference semantics and watermark state.
+Use each registered spec as the source of truth for scripts and QA. Use its Style Reference only for visual-system QA and failure review; ignore reference semantics.

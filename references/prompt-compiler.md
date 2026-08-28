@@ -2,9 +2,7 @@
 
 Compile one prompt per image. The selected Style Spec remains the suite-level visual system. The per-image prompt only changes the anchor, structure, metaphor, action, labels, and content elements.
 
-Do not ask the image model to create fixed brand components. Logos, brand names, watermarks, and page-number badges are not part of model generation.
-
-Resolve Brand Plugin from the explicit user override, then the selected Style Spec's `brandPolicy.defaultEnabled`, then compatibility default `false`. The selected Style Spec's top-right `brandSlot`, not the Style Reference, controls the reservation and deterministic overlay when the resolved state is enabled.
+Do not ask the image model to create third-party logos, watermarks, signatures, or page-number badges.
 
 Some style files may be written as "generate a whole set" prompts. Use those passages to infer default count, sequence logic, and set consistency, but never pass a batch-generation instruction into a single image prompt.
 
@@ -18,9 +16,8 @@ Save each compiled single-image prompt under the output folder's `prompts/` dire
 4. Content expression structure.
 5. Visual metaphor and physical action.
 6. Required page text or short labels.
-7. Resolved Brand Plugin status, policy source, and the selected Style Spec's active top-right brand-slot reservation.
-8. Negative constraints.
-9. Single-image generation instruction.
+7. Negative constraints.
+8. Single-image generation instruction.
 
 ## Single-Image Prompt Template
 
@@ -51,22 +48,15 @@ Suggested elements:
 Short labels:
 <short Chinese labels only; avoid long paragraphs>
 
-Brand Plugin:
-<enabled / disabled>
-Policy source:
-<user-override / style-default / legacy-default>
-Always: do not draw any logo, brand name, watermark, brand sticker, page-number badge, placeholder frame, reserve box, outline, empty label, or visible brand-slot marker.
-If enabled: keep the selected Style Spec's top-right brand slot naturally free of important content. The configured brand SVG will be overlaid after generation.
-If disabled: omit the reservation and overlay instructions, but keep the no-logo/no-watermark constraint.
-
 Constraints:
 - Generate only this one image, not a collage and not the whole set.
 - Keep the selected Style Spec consistent with the rest of the set.
 - This image must express only the core meaning above.
 - Do not add claims, examples, or facts not present in the source content.
+- Do not draw any third-party logo, watermark, signature, model mark, or page-number badge.
 - Avoid long text blocks. Use short, readable labels.
 - Keep important content inside the selected Style Spec's content safe area.
-- Keep active fixed component reserved areas clear. When Brand Plugin resolves disabled, the brand slot and brand reserved area are inactive for that run.
+- Keep active fixed component reserved areas clear.
 - Keep active reserved areas visually natural; do not mark them with a box, border, sticker, badge, or guide line.
 ```
 
@@ -94,11 +84,7 @@ Describe the Style Spec's target ratio and design-coordinate layout in the visua
 
 ## Fixed Component Policy
 
-Always keep these out of the image model:
-
-- Brand logos.
-- Brand names or lettering.
-- Watermarks.
+Always keep third-party logos, watermarks, signatures, and model marks out of the image model.
 
 Keep these out unless a selected Style Spec explicitly enables them:
 
@@ -106,9 +92,7 @@ Keep these out unless a selected Style Spec explicitly enables them:
 - Placeholder frames, reserve boxes, guide outlines, or visible markers for fixed component slots.
 - Template-level overlays that must be pixel-stable.
 
-If the model draws any of these by accident, regenerate with stronger negative constraints; apply overlays afterward only when the resolved Brand Plugin state is enabled.
-
-Do not use Style Reference watermark presence, absence, or position to enable, disable, or place the production brand overlay.
+If the model draws any of these by accident, regenerate with stronger negative constraints.
 
 ## Text Handling
 

@@ -5,29 +5,24 @@ import { existsSync } from "node:fs";
 import { lstat, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inflateSync } from "node:zlib";
-
-import { loadConfiguredBrandAsset } from "./apply-brand-overlay.mjs";
 
 const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONTRACT = "content-production-provider/v1";
-const PROVIDER = "illustration-v1";
-const BRAND_CONFIG = join(SKILL_ROOT, "brand-overlay.config.json");
+const PROVIDER = "illustration-v2";
 const PLATFORMS = new Set(["wechat", "xiaohongshu", "zhihu", "weibo", "toutiao"]);
 const VARIANTS = new Set(["A", "B"]);
 const keys = (value) => value.split(" ");
 const REQUEST_KEYS = keys("schema_version contract task_id capability provider_contract run_dir run_mode mode attempt platform provider_platform variant selection inputs output_dir expected_artifacts options interaction_policy");
-const OPTION_KEYS = keys("requested_output publishing_path style_id max_images brand_override backend_hint model_preference execution_strategy");
+const OPTION_KEYS = keys("requested_output publishing_path style_id max_images backend_hint model_preference execution_strategy");
 const SELECTION_KEYS = keys("platform variant title_id title topic_phrase draft_path draft_sha256 decision_rule");
-const PLAN_KEYS = keys("schema_version task_id status platform provider_platform variant source selection options analysis style brand generation_backend generation_geometry image_count anchors shot_list residual_risk");
+const PLAN_KEYS = keys("schema_version task_id status platform provider_platform variant source selection options analysis style generation_backend generation_geometry image_count anchors shot_list residual_risk");
 const ANALYSIS_KEYS = keys("main_line content_type expression_need");
 const STYLE_KEYS = keys("id platform style_file style_spec style_reference");
-const BRAND_KEYS = keys("enabled policy_default_enabled override policy_source disabled_reason");
 const BACKEND_KEYS = keys("kind adapter endpoint_source resolved_model artifact_format credential_access model_check process_cleanup_plan process_cleanup_status");
 const GEOMETRY_KEYS = keys("geometry_profile resolved_model requested_dimensions target_aspect_ratio design_dimensions delivery_dimensions ratio_tolerance minimum_short_edge native_output_policy post_generation_resize");
 const ANCHOR_KEYS = keys("image_id placement source_excerpt core_meaning structure visual_metaphor main_action suggested_elements short_labels qa_risk");
-const BUNDLE_KEYS = keys("schema_version task_id status platform provider_platform variant source selection plan shot_list style brand generation_backend generation_geometry image_count manifest images residual_risk");
-const IMAGE_KEYS = keys("image_id file file_sha256 source_file source_sha256 prompt_path prompt_sha256 placement core_meaning structure visual_metaphor content_qa_status style_qa_status brand_qa_status set_qa_status brand_overlay_status size_check_status generation_attempt requested_dimensions source_dimensions source_aspect_ratio source_artifact delivery_dimensions delivery_artifact native_output_preserved post_generation_actions geometry_attempts residual_risk");
+const BUNDLE_KEYS = keys("schema_version task_id status platform provider_platform variant source selection plan shot_list style generation_backend generation_geometry image_count manifest images residual_risk");
+const IMAGE_KEYS = keys("image_id file file_sha256 prompt_path prompt_sha256 placement core_meaning structure visual_metaphor content_qa_status style_qa_status set_qa_status size_check_status generation_attempt requested_dimensions source_dimensions source_aspect_ratio source_artifact delivery_dimensions delivery_artifact native_output_preserved post_generation_actions geometry_attempts residual_risk");
 const REF_KEYS = keys("path sha256");
 const ARTIFACT_KEYS = keys("format bytes");
 const DELIVERY_ARTIFACT_KEYS = keys("format bytes hard_limit_exporter");
@@ -80,14 +75,6 @@ function add(issues, code, message, extra = {}) {
 
 async function sha256(path) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
-}
-
-async function validateProviderBrandAsset(issues) {
-  try {
-    await loadConfiguredBrandAsset(BRAND_CONFIG, SKILL_ROOT);
-  } catch (error) {
-    add(issues, "required_brand_asset_unavailable", error.message);
-  }
 }
 
 async function hasSymlinkComponent(root, path, includeLeaf = true) {
@@ -161,7 +148,6 @@ function validOptions(options, platform) {
     && options.requested_output === expectedOutput && options.publishing_path === null
     && (options.style_id === null || typeof options.style_id === "string" && Boolean(options.style_id.trim()))
     && (options.max_images === null || Number.isInteger(options.max_images) && options.max_images > 0)
-    && [null, "enabled", "disabled"].includes(options.brand_override)
     && ["runtime-native", "configured-api", "unknown"].includes(options.backend_hint)
     && (options.model_preference === null
       || typeof options.model_preference === "string" && Boolean(options.model_preference.trim()))
@@ -260,16 +246,13 @@ async function validateRequest(input) {
     }
   }
 
-  if (!sameKeys(request, REQUEST_KEYS) || request.schema_version !== 1 || request.contract !== CONTRACT
+  if (!sameKeys(request, REQUEST_KEYS) || request.schema_version !== 2 || request.contract !== CONTRACT
     || request.capability !== "illustration" || request.provider_contract !== PROVIDER
     || !["autonomous", "reviewed"].includes(request.run_mode) || !modeValid
     || request.interaction_policy !== "return_to_orchestrator" || request.output_dir !== context.spec?.base
     || !validOptions(request.options, request.platform) || !validSelection(request.selection, request.platform, request.variant)
     || context.spec && context.requestPath !== resolve(context.runDir, context.spec.request)) {
-    add(context.issues, "invalid_provider_request", "Request does not match illustration-v1.");
-  }
-  if (request.options?.brand_override === "enabled") {
-    await validateProviderBrandAsset(context.issues);
+    add(context.issues, "invalid_provider_request", "Request does not match illustration-v2.");
   }
 
   const roles = request.mode === "plan"
@@ -367,7 +350,6 @@ function expectedGenerateArtifacts(context, plan) {
     context.spec.bundle,
     context.spec.manifest,
     ...images.map((item) => item.prompt),
-    ...images.map((item) => item.source).filter(Boolean),
     ...images.map((item) => item.delivery)
   ];
 }
@@ -399,19 +381,6 @@ async function registryStyle(plan, issues) {
     add(issues, "invalid_illustration_style", error.message);
     return null;
   }
-}
-
-function expectedBrand(request, styleSpec) {
-  const policyDefault = styleSpec.brandPolicy?.defaultEnabled ?? false;
-  const override = request.options.brand_override;
-  const enabled = override === "enabled" ? true : override === "disabled" ? false : policyDefault;
-  return {
-    enabled,
-    policy_default_enabled: policyDefault,
-    override,
-    policy_source: override === null ? (styleSpec.brandPolicy ? "style-default" : "legacy-default") : "user-override",
-    disabled_reason: enabled ? null : override === "disabled" ? "disabled-by-user" : "disabled-by-style-default"
-  };
 }
 
 async function expectedGeometry(styleSpec) {
@@ -460,11 +429,9 @@ async function currentGeneratedFiles(context) {
   await walk(`${context.spec.base}/prompts`);
   await walk(`${context.spec.base}/images`);
   if (context.request.attempt === 1) {
-    return output.filter((path) => !path.includes(`/prompts/v`) && !/\/images\/(?:unbranded\/|branded\/)?v\d{3}\//.test(path));
+    return output.filter((path) => !path.split("/").some((part) => /^v\d{3}$/.test(part)));
   }
-  return output.filter((path) => path.includes(`/prompts/${version}/`)
-    || path.includes(`/images/${version}/`) || path.includes(`/images/unbranded/${version}/`)
-    || path.includes(`/images/branded/${version}/`));
+  return output.filter((path) => path.split("/").includes(version));
 }
 
 async function validatePlan(context, { rejectGenerated = true } = {}) {
@@ -482,8 +449,8 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
       add(issues, "invalid_illustration_plan", error.message);
     }
   }
-  if (!plan) return { issues, plan: null, planPath, shotPath, styleSpec: null };
-  if (!sameKeys(plan, PLAN_KEYS) || plan.schema_version !== 1 || plan.task_id !== expectedTask
+  if (!plan) return { issues, plan: null, planPath, shotPath };
+  if (!sameKeys(plan, PLAN_KEYS) || plan.schema_version !== 2 || plan.task_id !== expectedTask
     || plan.status !== "READY" || plan.platform !== context.request.platform
     || plan.provider_platform !== context.request.provider_platform || plan.variant !== context.request.variant
     || !sameJson(plan.source, context.request.inputs[0]) || !sameJson(plan.selection, context.request.selection)
@@ -496,22 +463,15 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
     || !EXPRESSIONS.has(plan.analysis?.expression_need)) {
     add(issues, "invalid_illustration_analysis", "Plan analysis is incomplete.");
   }
-  if (!sameKeys(plan.style, STYLE_KEYS) || !sameKeys(plan.brand, BRAND_KEYS)
+  if (!sameKeys(plan.style, STYLE_KEYS)
     || !sameKeys(plan.generation_geometry, GEOMETRY_KEYS) || !validBackend(plan.generation_backend, "not-run")) {
-    add(issues, "invalid_illustration_plan", "Plan style, brand, backend, or geometry schema is invalid.");
+    add(issues, "invalid_illustration_plan", "Plan style, backend, or geometry schema is invalid.");
   }
   const registered = await registryStyle(plan, issues);
-  const styleSpec = registered?.spec ?? null;
   if (registered) {
     if (context.request.options.style_id !== null && context.request.options.style_id !== registered.entry.id) {
       add(issues, "invalid_illustration_style", "Selected style does not match options.style_id.");
     }
-    const brand = expectedBrand(context.request, registered.spec);
-    if (!sameJson(plan.brand, brand)) add(issues, "invalid_illustration_brand", "Brand policy resolution is incorrect.");
-    if (plan.brand.enabled && plan.generation_backend.artifact_format !== "png") {
-      add(issues, "invalid_illustration_brand", "Brand-enabled generation requires PNG source artifacts.");
-    }
-    if (plan.brand.enabled) await validateProviderBrandAsset(issues);
     const geometry = await expectedGeometry(registered.spec);
     if (!sameJson(plan.generation_geometry, geometry)) {
       add(issues, "invalid_illustration_geometry", "Generation geometry does not match the registered Style Spec.");
@@ -562,162 +522,13 @@ async function validatePlan(context, { rejectGenerated = true } = {}) {
   if (rejectGenerated && (await currentGeneratedFiles(context)).length) {
     add(issues, "plan_contains_generated_assets", "Plan mode cannot create current-attempt prompts or images.");
   }
-  return { issues, plan, planPath, shotPath, styleSpec };
+  return { issues, plan, planPath, shotPath };
 }
 
 function parsePng(buffer) {
   if (buffer.length < 24 || buffer.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
     || buffer.subarray(12, 16).toString("ascii") !== "IHDR") return null;
   return { format: "png", width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-}
-
-function paeth(left, up, upperLeft) {
-  const estimate = left + up - upperLeft;
-  const leftDistance = Math.abs(estimate - left);
-  const upDistance = Math.abs(estimate - up);
-  const upperLeftDistance = Math.abs(estimate - upperLeft);
-  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
-  if (upDistance <= upperLeftDistance) return up;
-  return upperLeft;
-}
-
-function decodePngRgba(buffer) {
-  if (buffer.length < 33 || buffer.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
-    throw new Error("not a PNG");
-  }
-  let offset = 8;
-  let header = null;
-  let palette = null;
-  let transparency = null;
-  let sawEnd = false;
-  const compressed = [];
-  while (offset + 12 <= buffer.length) {
-    const length = buffer.readUInt32BE(offset);
-    const type = buffer.subarray(offset + 4, offset + 8).toString("ascii");
-    const dataStart = offset + 8;
-    const dataEnd = dataStart + length;
-    if (dataEnd + 4 > buffer.length) throw new Error(`truncated ${type || "PNG"} chunk`);
-    const data = buffer.subarray(dataStart, dataEnd);
-    if (type === "IHDR") {
-      if (header || data.length !== 13) throw new Error("invalid PNG IHDR");
-      header = Buffer.from(data);
-    } else if (type === "PLTE") {
-      palette = Buffer.from(data);
-    } else if (type === "tRNS") {
-      transparency = Buffer.from(data);
-    } else if (type === "IDAT") {
-      compressed.push(data);
-    } else if (type === "IEND") {
-      sawEnd = true;
-      break;
-    }
-    offset = dataEnd + 4;
-  }
-  if (!header || !sawEnd || compressed.length === 0) throw new Error("incomplete PNG structure");
-
-  const width = header.readUInt32BE(0);
-  const height = header.readUInt32BE(4);
-  const bitDepth = header[8];
-  const colorType = header[9];
-  const interlace = header[12];
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0
-    || width > 4096 || height > 4096 || width * height > 10_000_000) {
-    throw new Error("unsafe PNG dimensions");
-  }
-  if (bitDepth !== 8 || ![0, 2, 3, 4, 6].includes(colorType) || interlace !== 0) {
-    throw new Error("unsupported PNG pixel encoding");
-  }
-  if (colorType === 3 && (!palette || palette.length === 0 || palette.length % 3 !== 0
-    || palette.length > 768 || transparency && transparency.length > palette.length / 3)) {
-    throw new Error("invalid PNG palette");
-  }
-
-  const bytesPerPixel = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 })[colorType];
-  const stride = width * bytesPerPixel;
-  const expectedLength = (stride + 1) * height;
-  const inflated = inflateSync(Buffer.concat(compressed), { maxOutputLength: expectedLength });
-  if (inflated.length !== expectedLength) throw new Error("unexpected PNG pixel data length");
-
-  const pixels = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; y += 1) {
-    const sourceRow = y * (stride + 1);
-    const targetRow = y * stride;
-    const filter = inflated[sourceRow];
-    for (let x = 0; x < stride; x += 1) {
-      const encoded = inflated[sourceRow + 1 + x];
-      const left = x >= bytesPerPixel ? pixels[targetRow + x - bytesPerPixel] : 0;
-      const up = y > 0 ? pixels[targetRow - stride + x] : 0;
-      const upperLeft = y > 0 && x >= bytesPerPixel
-        ? pixels[targetRow - stride + x - bytesPerPixel] : 0;
-      let predictor;
-      if (filter === 0) predictor = 0;
-      else if (filter === 1) predictor = left;
-      else if (filter === 2) predictor = up;
-      else if (filter === 3) predictor = Math.floor((left + up) / 2);
-      else if (filter === 4) predictor = paeth(left, up, upperLeft);
-      else throw new Error(`unsupported PNG filter ${filter}`);
-      pixels[targetRow + x] = (encoded + predictor) & 0xff;
-    }
-  }
-
-  const rgba = Buffer.alloc(width * height * 4);
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
-    const source = pixel * bytesPerPixel;
-    const target = pixel * 4;
-    if (colorType === 0) {
-      rgba[target] = pixels[source];
-      rgba[target + 1] = pixels[source];
-      rgba[target + 2] = pixels[source];
-      rgba[target + 3] = 255;
-    } else if (colorType === 2) {
-      pixels.copy(rgba, target, source, source + 3);
-      rgba[target + 3] = 255;
-    } else if (colorType === 3) {
-      const index = pixels[source];
-      const paletteOffset = index * 3;
-      if (paletteOffset + 2 >= palette.length) throw new Error("PNG palette index is out of range");
-      palette.copy(rgba, target, paletteOffset, paletteOffset + 3);
-      rgba[target + 3] = transparency?.[index] ?? 255;
-    } else if (colorType === 4) {
-      rgba[target] = pixels[source];
-      rgba[target + 1] = pixels[source];
-      rgba[target + 2] = pixels[source];
-      rgba[target + 3] = pixels[source + 1];
-    } else {
-      pixels.copy(rgba, target, source, source + 4);
-    }
-  }
-  return { width, height, rgba };
-}
-
-async function brandPixelDelta(sourcePath, deliveryPath, styleSpec) {
-  const [source, delivery] = await Promise.all([
-    readFile(sourcePath).then(decodePngRgba),
-    readFile(deliveryPath).then(decodePngRgba)
-  ]);
-  if (source.width !== delivery.width || source.height !== delivery.height) {
-    throw new Error("source and delivery PNG dimensions differ");
-  }
-  const canvas = styleSpec?.canvas;
-  const slot = styleSpec?.fixedComponents?.brandSlot;
-  if (!canvas || !slot) throw new Error("registered Style Spec has no brand slot geometry");
-  const xStart = Math.max(0, Math.floor(slot.x * source.width / canvas.width));
-  const yStart = Math.max(0, Math.floor(slot.y * source.height / canvas.height));
-  const xEnd = Math.min(source.width, Math.ceil((slot.x + slot.width) * source.width / canvas.width));
-  const yEnd = Math.min(source.height, Math.ceil((slot.y + slot.height) * source.height / canvas.height));
-  let changedInside = 0;
-  let changedOutside = 0;
-  for (let y = 0; y < source.height; y += 1) {
-    for (let x = 0; x < source.width; x += 1) {
-      const offset = (y * source.width + x) * 4;
-      const bothTransparent = source.rgba[offset + 3] === 0 && delivery.rgba[offset + 3] === 0;
-      if (bothTransparent || source.rgba.subarray(offset, offset + 4)
-        .equals(delivery.rgba.subarray(offset, offset + 4))) continue;
-      if (x >= xStart && x < xEnd && y >= yStart && y < yEnd) changedInside += 1;
-      else changedOutside += 1;
-    }
-  }
-  return { changedInside, changedOutside };
 }
 
 function parseJpeg(buffer) {
@@ -780,13 +591,13 @@ async function validateGenerate(context, planValidation) {
   const plan = planValidation.plan;
   if (!bundle || !plan) return { issues, artifacts, bundle };
   const expectedBackend = { ...plan.generation_backend, process_cleanup_status: "pass" };
-  if (!sameKeys(bundle, BUNDLE_KEYS) || bundle.schema_version !== 1 || bundle.task_id !== context.request.task_id
+  if (!sameKeys(bundle, BUNDLE_KEYS) || bundle.schema_version !== 2 || bundle.task_id !== context.request.task_id
     || bundle.status !== "PASS" || bundle.platform !== context.request.platform
     || bundle.provider_platform !== context.request.provider_platform || bundle.variant !== context.request.variant
     || !sameJson(bundle.source, context.request.inputs[0]) || !sameJson(bundle.selection, context.request.selection)
     || !sameJson(bundle.plan, { path: context.spec.plan, sha256: context.request.inputs[2].sha256 })
     || !sameJson(bundle.shot_list, { path: context.spec.shot, sha256: context.request.inputs[3].sha256 })
-    || !sameJson(bundle.style, plan.style) || !sameJson(bundle.brand, plan.brand)
+    || !sameJson(bundle.style, plan.style)
     || !sameJson(bundle.generation_backend, expectedBackend)
     || !sameJson(bundle.generation_geometry, plan.generation_geometry)
     || bundle.image_count !== plan.image_count) {
@@ -826,12 +637,12 @@ async function validateGenerate(context, planValidation) {
     if (image.image_id !== anchor.image_id || image.placement !== anchor.placement
       || image.core_meaning !== anchor.core_meaning || image.structure !== anchor.structure
       || image.visual_metaphor !== anchor.visual_metaphor || image.prompt_path !== pathSet.prompt
-      || image.source_file !== pathSet.source || image.file !== pathSet.delivery) {
+      || image.file !== pathSet.delivery) {
       add(issues, "illustration_image_ids_mismatch", `Image row does not match approved anchor ${anchor.image_id}.`);
     }
     const promptPath = paths.get(pathSet.prompt);
-    const sourcePath = pathSet.source ? paths.get(pathSet.source) : paths.get(pathSet.delivery);
     const deliveryPath = paths.get(pathSet.delivery);
+    const sourcePath = deliveryPath;
     if (promptPath && image.prompt_sha256 !== await sha256(promptPath)) {
       add(issues, "provider_artifact_drift", `Prompt hash is stale: ${pathSet.prompt}.`, { path: pathSet.prompt });
     }
@@ -840,30 +651,6 @@ async function validateGenerate(context, planValidation) {
     }
     if (deliveryPath && image.file_sha256 !== await sha256(deliveryPath)) {
       add(issues, "provider_artifact_drift", `Delivery hash is stale: ${pathSet.delivery}.`, { path: pathSet.delivery });
-    }
-    if (pathSet.source && sourcePath && image.source_sha256 !== await sha256(sourcePath)) {
-      add(issues, "provider_artifact_drift", `Source hash is stale: ${pathSet.source}.`, { path: pathSet.source });
-    }
-    if (pathSet.source && sourcePath && deliveryPath && await sha256(sourcePath) === await sha256(deliveryPath)) {
-      add(issues, "invalid_illustration_brand", `Brand overlay did not change delivery bytes: ${anchor.image_id}.`);
-    }
-    if (pathSet.source && sourcePath && deliveryPath) {
-      try {
-        const delta = await brandPixelDelta(sourcePath, deliveryPath, planValidation.styleSpec);
-        if (delta.changedInside === 0 || delta.changedOutside !== 0) {
-          add(
-            issues,
-            "invalid_illustration_brand",
-            `Brand overlay pixel delta is invalid for ${anchor.image_id}: `
-              + `inside=${delta.changedInside}, outside=${delta.changedOutside}.`
-          );
-        }
-      } catch (error) {
-        add(issues, "invalid_illustration_brand", `Unable to verify brand overlay pixels for ${anchor.image_id}: ${error.message}`);
-      }
-    }
-    if (!pathSet.source && (image.source_file !== null || image.source_sha256 !== null)) {
-      add(issues, "invalid_illustration_brand", "Brand-disabled delivery must not declare a second source file.");
     }
     const sourceInfo = sourcePath ? await rasterInfo(sourcePath) : null;
     const deliveryInfo = deliveryPath ? await rasterInfo(deliveryPath) : null;
@@ -906,14 +693,8 @@ async function validateGenerate(context, planValidation) {
         add(issues, "illustration_attempt_limit", `Final accepted attempt is inconsistent for ${anchor.image_id}.`);
       }
     }
-    const disabled = plan.brand.disabled_reason;
-    const brandValid = plan.brand.enabled
-      ? image.brand_qa_status === "pass" && image.brand_overlay_status === "applied"
-        && sameJson(image.post_generation_actions, ["brand-overlay-native"])
-      : image.brand_qa_status === disabled && image.brand_overlay_status === disabled
-        && sameJson(image.post_generation_actions, []);
     if (image.content_qa_status !== "pass" || image.style_qa_status !== "pass"
-      || image.set_qa_status !== "pass" || !brandValid) {
+      || image.set_qa_status !== "pass" || !sameJson(image.post_generation_actions, [])) {
       add(issues, "illustration_qa_failed", `QA failed for ${anchor.image_id}.`);
     }
     if (image.residual_risk !== "none") {
@@ -927,11 +708,7 @@ function expectedImagePaths(context, plan) {
   const ext = plan.generation_backend.artifact_format === "png" ? "png" : "jpg";
   return plan.anchors.map((anchor) => ({
     prompt: `${context.spec.promptDir}/${anchor.image_id}.md`,
-    source: plan.brand.enabled
-      ? `${context.spec.base}/images/unbranded${context.spec.imageVersion}/${anchor.image_id}.png` : null,
-    delivery: plan.brand.enabled
-      ? `${context.spec.base}/images/branded${context.spec.imageVersion}/${anchor.image_id}.png`
-      : `${context.spec.base}/images${context.spec.imageVersion}/${anchor.image_id}.${ext}`
+    delivery: `${context.spec.base}/images${context.spec.imageVersion}/${anchor.image_id}.${ext}`
   }));
 }
 
@@ -941,7 +718,6 @@ function artifactRole(context, path) {
   if (path === context.spec.bundle) return "illustration_bundle";
   if (path === context.spec.manifest) return "native_manifest";
   if (path.includes("/prompts/")) return "prompt";
-  if (path.includes("/images/unbranded/")) return "source_image";
   return "delivery_image";
 }
 
@@ -957,7 +733,7 @@ async function collectPlanArtifacts(context, validation) {
 
 function makeResult(context, status, artifacts, issues, requestValid = true) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     contract: CONTRACT,
     provider_contract: PROVIDER,
     task_id: context.request?.task_id || "unknown",

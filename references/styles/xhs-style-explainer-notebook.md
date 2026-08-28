@@ -33,7 +33,7 @@
 
 # 二、Style Spec 主控规范
 
-本文件是小红书手账科普模板的主控 Style Spec。它决定小红书这一套模板的尺寸、色值、布局、安全区和固定组件槽位。Brand Plugin 只能服从这里定义的品牌槽位，不能反向决定本模板的尺寸、颜色或坐标。
+本文件是小红书手账科普模板的主控 Style Spec。它决定小红书这一套模板的尺寸、色值、布局、安全区和固定组件槽位。
 
 ## 1. 画布
 
@@ -64,17 +64,11 @@
 - Outer background: full canvas.
 - Main paper region: approximately `x=52, y=42, w=982, h=1354`.
 - Content safe area: approximately `x=92, y=112, w=902, h=1196`.
-- Brand reserved area: `x=848, y=44, w=208, h=90`.
-- When Brand Plugin is enabled, keep titles, labels, icons, robots, arrows, cards, and conclusion bars out of the brand reserved area.
 - Do not place critical content within `40 px` of the canvas edge.
 
 ## 4. Fixed Components
 
 - Page-number badges: disabled. Do not generate visible `01`, `02`, `03` corner badges.
-- Brand slot: present but inactive by default; reserve it only when the user explicitly enables branding.
-- Brand slot for this style: top-right, `x=878, y=64, w=148, h=40`.
-- Brand slot asset: configured brand SVG overlaid after generation.
-- The image model must not draw brand names, logo shapes, watermarks, brand stickers, placeholder frames, reserve boxes, guide outlines, or visible markers for the brand slot.
 
 ---
 
@@ -355,8 +349,7 @@
 - 信息层级混乱
 - 装饰压过正文
 - 数字页码角标
-- 模型生成的 logo、水印或品牌贴纸
-- 右上角品牌槽的占位框、线框、空标签、角标或可见引导线
+- 占位框、线框、空标签、角标或可见引导线
 
 ---
 
@@ -427,7 +420,6 @@
 - 可爱机器人
 - 扁平圆润图标
 - 充实的中下部内容
-- Brand Plugin 启用时右上角品牌槽位留白；无论是否启用都不生成 logo；只有用户明确启用时才在生成后叠加已配置品牌 SVG
 
 ## 第六步：检查质量
 
@@ -442,7 +434,6 @@
 - 是否没有跑成科技风或商务风？
 - 是否没有乱加原文没有的内容？
 - 是否没有数字页码角标？
-- 是否没有模型生成的 logo、水印？
 
 ---
 
@@ -461,10 +452,7 @@
 - 保留一个统一风格的可爱卡通机器人吉祥物
 - 图标统一为扁平、圆润、简洁、可爱的风格
 - 不生成页码角标
-- 不生成 logo、水印或品牌贴纸
-- Brand Plugin 启用时，右上角 `x=848, y=44, w=208, h=90` 区域不放正文、图标、机器人或结论条，留给后期品牌 SVG 叠加
-- 仅 Brand Plugin 启用时要求右上角品牌区域保持自然纸面/背景状态；无论是否启用，都不要画占位框、线框、贴纸、空标签、角标或引导线
-- 用户明确启用品牌时，生产图片必须在生成后把已配置品牌 SVG 叠加到 `x=878, y=64, w=148, h=40`
+- 不生成占位框、线框、贴纸、空标签、角标或引导线
 - 整体风格是小红书手账感科普信息图
 - 不是科技炫酷风
 - 不是商务 PPT 风
@@ -495,8 +483,7 @@
 - 不要版式完全复制上一张
 - 不要乱改原文含义
 - 不要生成数字页码角标
-- 不要生成 logo、水印或品牌贴纸
-- 不要生成品牌槽占位框、线框、空标签或可见引导线
+- 不要生成占位框、线框、空标签或可见引导线
 
 ---
 
@@ -544,7 +531,5 @@
 - 是否避免了科技风、商务风、写实风？
 - 是否没有乱加内容？
 - 是否没有数字页码角标？
-- Brand Plugin 启用时，是否为右上角品牌槽位留出清爽区域？
-- 是否在用户明确启用品牌时完成了已配置品牌 SVG 叠加？
 
 ---

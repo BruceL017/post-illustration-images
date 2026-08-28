@@ -29,11 +29,11 @@ All paths stored in the bundle must be relative POSIX paths without `..`, backsl
 
 ## Candidate metadata
 
-`candidate.json` uses this shape:
+`candidate.json` uses this v2 shape:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "approved",
   "template_ready": true,
   "style": {
@@ -42,11 +42,7 @@ All paths stored in the bundle must be relative POSIX paths without `..`, backsl
     "platform": "xhs",
     "makeDefault": true,
     "defaultUse": "Default routing use",
-    "aliases": ["example alias"],
-    "brandPolicy": {
-      "defaultEnabled": false,
-      "userOverrideAllowed": true
-    }
+    "aliases": ["example alias"]
   },
   "files": {
     "styleMarkdown": "style.md",
@@ -83,41 +79,13 @@ New candidates use the platform baseline as a design coordinate system, not as r
 | `weibo` | `weibo` | `1080 x 1440` | `3:4` | vertical |
 | `toutiao` | `toutiao` | `1600 x 900` | `16:9` | horizontal |
 
-`style.spec.json` must use the candidate ID, the mapped spec platform, and the exact baseline design canvas. `styleFile` must be `references/styles/<style_id>.md`. Every rectangle under `layout`, including `contentSafeArea` and `brandReservedArea`, must have positive finite dimensions and stay inside that coordinate system.
+`style.spec.json` must use the candidate ID, the mapped spec platform, and the exact baseline design canvas. `styleFile` must be `references/styles/<style_id>.md`. Every rectangle under `layout`, including `contentSafeArea`, must have positive finite dimensions and stay inside that coordinate system.
 
-The content safe area, brand reserved area, and brand slot must equal the platform baseline. `inputHandling` must set `preserveNativeOutput: true`, `outputCanvasRole: "design-coordinate-system"`, `allowPostGenerationResize: false`, and `ratioTolerance: 0.002`; it must forbid crop, padding, rotation, and wrong-ratio stretching and use `wrongRatioAction: "regenerate"`. An accepted model raster owns its delivery pixel dimensions. Toutiao additionally uses `minShortEdge: 900` as an internal calibration quality floor, not an uploader limit.
+The content safe area must equal the platform baseline. `inputHandling` must set `preserveNativeOutput: true`, `outputCanvasRole: "design-coordinate-system"`, `allowPostGenerationResize: false`, and `ratioTolerance: 0.002`; it must forbid crop, padding, rotation, and wrong-ratio stretching and use `wrongRatioAction: "regenerate"`. An accepted model raster owns its delivery pixel dimensions. Toutiao additionally uses `minShortEdge: 900` as an internal calibration quality floor, not an uploader limit.
 
-The Weibo baseline uses content safe area `{ "x": 80, "y": 96, "width": 920, "height": 1248 }`, brand reserved area `{ "x": 842, "y": 44, "width": 208, "height": 90 }`, and brand slot `{ "x": 872, "y": 64, "width": 148, "height": 40 }`.
+The formal reference path is `assets/style-references/<style_id>.png`. The spec must declare it under `styleReference.image`, set `styleReference.isGenerationInput` to `false`, and include non-empty `usage` and `contentPolicy` strings. `calibration/style-reference.png` must be byte-identical to the selected calibration image.
 
-The formal reference path is `assets/style-references/<style_id>.png`. The spec must declare it under `styleReference.image`, set `styleReference.isGenerationInput` to `false`, and include non-empty `usage` and `contentPolicy` strings. `calibration/style-reference.png` must be byte-identical to the selected unbranded calibration image.
-
-## Brand contract
-
-Every installed spec keeps valid top-right brand geometry even when branding defaults off:
-
-```json
-{
-  "brandPolicy": {
-    "defaultEnabled": false,
-    "userOverrideAllowed": true
-  },
-  "fixedComponents": {
-    "brandSlot": {
-      "enabled": true,
-      "anchor": "top-right",
-      "x": 872,
-      "y": 64,
-      "width": 148,
-      "height": 40,
-      "assetFit": "contain"
-    }
-  }
-}
-```
-
-`brandPolicy.defaultEnabled` must be `false`; `userOverrideAllowed` must be `true`. The slot must fit inside `layout.brandReservedArea`, which must sit in the top-right canvas quadrant. `generationConstraints.forbidModelDrawnBrand` and `keepBrandReservedAreaClear` must both be `true`. The slot and reserved area stay inactive unless the runtime resolves an explicit enable override.
-
-At runtime, brand resolution is: explicit user choice, then template default, then compatibility default `false` for an older spec without `brandPolicy`. When the resolved value is false, the reserved area is not active, but its geometry remains valid.
+V2 candidates and installed specs must not contain the legacy `style.brandPolicy`, `brandPolicy`, `layout.brandReservedArea`, `fixedComponents.brandSlot`, `generationConstraints.forbidModelDrawnBrand`, or `generationConstraints.keepBrandReservedAreaClear` fields. The validator rejects them instead of silently ignoring them.
 
 ## QA contract
 
@@ -127,11 +95,14 @@ It also records separate `reviews.style` and `reviews.originality` runs with dif
 
 - Every `dimension_averages` and per-image `scores` value is at least `75`.
 - Every image `total_score` is at least `85`; `average_score` is at least `88`.
-- Every item under top-level and per-image `hard_gates` is a pass flag and must be `true`: `dimensions`, `aspect_ratio`, `safe_area`, `single_core_meaning`, `identity_leakage`, and `brand_free`. Here `identity_leakage: true` means the no-leakage check passed.
+- Every item under top-level and per-image `hard_gates` is a pass flag and must be `true`: `dimensions`, `aspect_ratio`, `safe_area`, `single_core_meaning`, and `identity_leakage`.
+- `identity_leakage: true` means the originality check found no copied source identity, third-party logo, watermark, or signature.
 - Each image records a non-empty generation backend and model plus dimensions matching the actual calibration PNG. Calibration images and the selected Style Reference must match the design canvas ratio within tolerance; they do not need to equal its pixel dimensions.
-- `selected_reference.image_id` selects one of the three images, `source_image` matches that image's file, `path` is `calibration/style-reference.png`, and `unbranded` is `true`.
+- `selected_reference.image_id` selects one of the three images, `source_image` matches that image's file, and `path` is `calibration/style-reference.png`.
 - Image `file` and `prompt_file` values must be the canonical paths shown in the required layout.
 - `contact_sheet` must be `calibration/contact-sheet.png`; it is a valid PNG used only for human comparison and is never installed as the formal style reference.
+
+V2 `qa.json` must not contain the legacy `brand_free` hard gate or `selected_reference.unbranded` field.
 
 `provenance.json` records either image extraction or supplied Visual DNA. Image mode requires the source SHA-256, source dimensions, computed short edge of at least 512, and confidence from 0 to 1. DNA mode records `source.kind: "provided-visual-dna"`. Both modes require `original_retained: false` and `used_as_generation_reference: false`.
 
